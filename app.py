@@ -187,6 +187,8 @@ def process():
                     '시작시간': pair.get_start_time(),
                     '종료시간': pair.get_end_time(),
                     '장소': '연구실',
+                    '학생': pair.get_student_name(),
+                    '학번': pair.get_student_id(),
                     '상담요청 내용': pair.get_request_text(),
                     '교수 답변': pair.get_response_text()
                 })
