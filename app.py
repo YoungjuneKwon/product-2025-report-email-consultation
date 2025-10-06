@@ -46,7 +46,19 @@ class QueueHandler(logging.Handler):
     def emit(self, record):
         try:
             msg = self.format(record)
-            self.log_queue.put(msg)
+            # Check if this is a progress message and format accordingly
+            if 'PROGRESS|' in msg:
+                # Extract progress information
+                parts = msg.split('PROGRESS|')
+                if len(parts) > 1:
+                    progress_data = parts[1].strip()
+                    # Send both the formatted log and the progress data separately
+                    self.log_queue.put(msg)
+                    self.log_queue.put(f"__PROGRESS__{progress_data}")
+                else:
+                    self.log_queue.put(msg)
+            else:
+                self.log_queue.put(msg)
         except Exception:
             self.handleError(record)
 
