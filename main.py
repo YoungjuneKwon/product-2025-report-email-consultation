@@ -103,7 +103,11 @@ class GmailPOP3Client:
         self.connection = None
     
     def connect(self) -> bool:
-        """Connect to Gmail POP3 server and authenticate."""
+        """Connect to Gmail POP3 server and authenticate.
+        
+        Returns:
+            True on success, or an error message string on failure
+        """
         try:
             logger.info("Connecting to Gmail POP3 server...")
             self.connection = poplib.POP3_SSL('pop.gmail.com', 995)
@@ -117,15 +121,21 @@ class GmailPOP3Client:
             return True
             
         except poplib.error_proto as e:
+            error_msg = str(e).lower()
             logger.error(f"Authentication failed: {e}")
             logger.error("Please check your Gmail credentials and ensure:")
             logger.error("1. 2-Step Verification is enabled")
             logger.error("2. You are using an App Password (not your regular password)")
             logger.error("3. POP is enabled in Gmail settings")
-            return False
+            
+            # Return specific error type for web interface
+            if 'auth' in error_msg or 'password' in error_msg or 'credential' in error_msg:
+                return "AUTH_FAILED"
+            return "CONNECTION_FAILED"
+            
         except Exception as e:
             logger.error(f"Connection failed: {e}")
-            return False
+            return "CONNECTION_FAILED"
     
     def fetch_emails(self, start_date: datetime, end_date: datetime) -> List[email.message.EmailMessage]:
         """Fetch emails within the specified date range."""
@@ -303,8 +313,10 @@ def process_emails(gmail_userid: str, gmail_password: str, start_date: datetime,
     
     # Connect to Gmail
     client = GmailPOP3Client(gmail_userid, gmail_password)
-    if not client.connect():
-        return [], "Failed to connect to Gmail. Please check credentials and ensure POP is enabled."
+    connect_result = client.connect()
+    if connect_result is not True:
+        # Return specific error message from connect method
+        return [], connect_result if isinstance(connect_result, str) else "Failed to connect to Gmail. Please check credentials and ensure POP is enabled."
     
     try:
         # Fetch emails
