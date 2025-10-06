@@ -68,8 +68,19 @@ python main.py
 - Excel 파일이 `consultation_report_YYYYMMDD_HHMMSS.xlsx` 형식으로 생성됩니다.
 - 파일에는 필터링된 상담 메일 쌍들이 포함됩니다.
 
+## 테스트
+
+Gmail 계정 없이 기능을 테스트하려면 예제 스크립트를 실행하세요:
+
+```bash
+python example.py
+```
+
+이 스크립트는 샘플 이메일 데이터로 필터링 로직을 테스트하고 `example_report.xlsx` 파일을 생성합니다.
+
 ## 파일 구조
 
 - `main.py`: 메인 스크립트
+- `example.py`: 테스트용 예제 스크립트
 - `requirements.txt`: Python 의존성
 - `.gitignore`: Git 제외 파일 목록
