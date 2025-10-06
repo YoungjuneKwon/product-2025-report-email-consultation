@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Gmail POP3 Email Consultation Report Generator
+Gmail IMAP Email Consultation Report Generator
 
-This script fetches emails from Gmail using POP3, filters consultation request-response pairs,
+This script fetches emails from Gmail using IMAP, filters consultation request-response pairs,
 and generates an Excel report.
 """
 
-import poplib
+import imaplib
 import email
 from email.parser import BytesParser
 from email.policy import default
@@ -94,8 +94,8 @@ class EmailPair:
         return body.strip()
 
 
-class GmailPOP3Client:
-    """Client for fetching emails from Gmail using POP3."""
+class GmailIMAPClient:
+    """Client for fetching emails from Gmail using IMAP."""
     
     def __init__(self, userid: str, password: str):
         self.userid = userid
@@ -103,30 +103,29 @@ class GmailPOP3Client:
         self.connection = None
     
     def connect(self) -> bool:
-        """Connect to Gmail POP3 server and authenticate.
+        """Connect to Gmail IMAP server and authenticate.
         
         Returns:
             True on success, or an error message string on failure
         """
         try:
-            logger.info("Connecting to Gmail POP3 server...")
-            self.connection = poplib.POP3_SSL('pop.gmail.com', 995)
+            logger.info("Connecting to Gmail IMAP server...")
+            self.connection = imaplib.IMAP4_SSL('imap.gmail.com', 993)
             
             # Authenticate
             logger.info(f"Authenticating as {self.userid}...")
-            self.connection.user(self.userid)
-            self.connection.pass_(self.password)
+            self.connection.login(self.userid, self.password)
             
             logger.info("Successfully connected to Gmail")
             return True
             
-        except poplib.error_proto as e:
+        except imaplib.IMAP4.error as e:
             error_msg = str(e).lower()
             logger.error(f"Authentication failed: {e}")
             logger.error("Please check your Gmail credentials and ensure:")
             logger.error("1. 2-Step Verification is enabled")
             logger.error("2. You are using an App Password (not your regular password)")
-            logger.error("3. POP is enabled in Gmail settings")
+            logger.error("3. IMAP is enabled in Gmail settings")
             
             # Return specific error type for web interface
             if 'auth' in error_msg or 'password' in error_msg or 'credential' in error_msg:
@@ -144,40 +143,70 @@ class GmailPOP3Client:
             return []
         
         try:
-            # Get number of messages
-            num_messages = len(self.connection.list()[1])
-            logger.info(f"Total messages in mailbox: {num_messages}")
+            # Select INBOX
+            logger.info("Selecting INBOX...")
+            status, messages = self.connection.select('INBOX')
+            if status != 'OK':
+                logger.error(f"Failed to select INBOX: {messages}")
+                return []
+            
+            total_messages = int(messages[0])
+            logger.info(f"Total messages in INBOX: {total_messages}")
+            
+            # Search for emails in date range using IMAP server-side filtering
+            # Format dates for IMAP search (DD-Mon-YYYY)
+            since_date = start_date.strftime('%d-%b-%Y')
+            before_date = (end_date + timedelta(days=1)).strftime('%d-%b-%Y')
+            
+            logger.info(f"Searching for emails from {since_date} to {before_date}")
+            search_criteria = f'(SINCE {since_date} BEFORE {before_date})'
+            
+            status, message_numbers = self.connection.search(None, search_criteria)
+            if status != 'OK':
+                logger.error(f"Search failed: {message_numbers}")
+                return []
+            
+            # Get list of message IDs
+            message_ids = message_numbers[0].split()
+            num_messages = len(message_ids)
+            logger.info(f"Found {num_messages} messages in date range")
+            
+            if num_messages == 0:
+                return []
             
             emails = []
             
-            # Fetch all messages (POP3 doesn't support server-side date filtering)
-            for i in range(1, num_messages + 1):
+            # Fetch messages
+            for idx, msg_id in enumerate(message_ids, 1):
                 try:
                     logger.info("=" * 40)
-                    logger.info(f"Processing message {i}/{num_messages}")
-                    logger.info(f"Fetching headers for message {i}...")
+                    logger.info(f"Processing message {idx}/{num_messages}")
+                    logger.info(f"Fetching message ID: {msg_id.decode()}")
                     
-                    # Fetch message
-                    response, lines, octets = self.connection.retr(i)
-                    
-                    logger.info(f"Downloading full message {i}...")
-                    logger.info(f"Downloaded {len(lines)} lines, {octets} bytes")
+                    # Fetch email
+                    status, msg_data = self.connection.fetch(msg_id, '(RFC822)')
+                    if status != 'OK':
+                        logger.warning(f"Failed to fetch message {msg_id}: {msg_data}")
+                        continue
                     
                     # Parse email
-                    msg_data = b'\r\n'.join(lines)
-                    msg = BytesParser(policy=default).parsebytes(msg_data)
+                    raw_email = msg_data[0][1]
+                    logger.info(f"Downloading full message {idx}...")
+                    logger.info(f"Downloaded {len(raw_email)} bytes")
+                    
+                    msg = BytesParser(policy=default).parsebytes(raw_email)
                     
                     # Log message details
                     from_addr = msg.get('From', 'Unknown')
                     to_addr = msg.get('To', 'Unknown')
                     subject = msg.get('Subject', 'No subject')
-                    msg_id = msg.get('Message-ID', 'No Message-ID')
+                    msg_id_header = msg.get('Message-ID', 'No Message-ID')
                     
-                    logger.info(f"Message {i} info:")
+                    logger.info(f"Message {idx} info:")
                     logger.info(f"  From: {from_addr}")
                     logger.info(f"  To: {to_addr}")
                     logger.info(f"  Subject: {subject}")
-                    logger.info(f"  Message-ID: {msg_id}")
+                    logger.info(f"  Message-ID: {msg_id_header}")
                     
                     # Log email parsing info
                     is_multipart = msg.is_multipart()
@@ -189,30 +218,32 @@ class GmailPOP3Client:
                     logger.info(f"    Content-Type: {content_type}")
                     logger.info(f"    Charset: {charset}")
                     
-                    # Check date
+                    # Check and log date
                     if 'Date' in msg:
                         msg_date = parsedate_to_datetime(msg['Date'])
                         logger.info(f"  Date: {msg_date.strftime('%Y-%m-%d %H:%M:%S %Z%z')}")
                         
-                        # Filter by date range
+                        # Double-check date is in range (IMAP search should handle this)
                         if start_date <= msg_date <= end_date:
-                            logger.info(f"  ✓ Date is within range - fetching full message")
+                            logger.info(f"  ✓ Date is within range")
                             emails.append(msg)
-                            logger.info(f"  ✓ Message {i} INCLUDED in results")
+                            logger.info(f"  ✓ Message {idx} INCLUDED in results")
                         else:
-                            logger.info(f"  ✗ Date is outside range - skipping")
-                            logger.info(f"  ✗ Message {i} EXCLUDED from results")
+                            logger.info(f"  ✗ Date is outside range (IMAP search returned it anyway)")
+                            logger.info(f"  ✗ Message {idx} EXCLUDED from results")
                     else:
-                        logger.warning(f"  ⚠ No date header found - skipping")
+                        logger.warning(f"  ⚠ No date header found - including anyway")
+                        emails.append(msg)
+                        logger.info(f"  ✓ Message {idx} INCLUDED in results")
                     
                     # Log progress every 50 messages
-                    if i % 50 == 0:
+                    if idx % 50 == 0:
                         logger.info("=" * 40)
-                        logger.info(f"Progress: Processed {i}/{num_messages} messages, {len(emails)} included so far")
+                        logger.info(f"Progress: Processed {idx}/{num_messages} messages, {len(emails)} included so far")
                         logger.info("=" * 40)
                         
                 except Exception as e:
-                    logger.warning(f"Error fetching message {i}: {e}")
+                    logger.warning(f"Error fetching message {msg_id}: {e}")
                     continue
             
             logger.info("=" * 40)
@@ -225,10 +256,11 @@ class GmailPOP3Client:
             return []
     
     def close(self):
-        """Close the POP3 connection."""
+        """Close the IMAP connection."""
         if self.connection:
             try:
-                self.connection.quit()
+                self.connection.close()
+                self.connection.logout()
                 logger.info("Connection closed")
             except Exception as e:
                 logger.warning(f"Error closing connection: {e}")
@@ -333,20 +365,6 @@ class EmailFilter:
         logger.info(f"After keyword filtering: {len(filtered)} pairs")
         logger.info("=" * 40)
         return filtered
-    
-    def filter_by_student_id(self, pairs: List[EmailPair]) -> List[EmailPair]:
-        """Filter pairs where original email contains an 8-digit number (student ID)."""
-        pattern = re.compile(r'\d{8}')
-        filtered = []
-        
-        for pair in pairs:
-            request_text = pair.get_request_text()
-            
-            if pattern.search(request_text):
-                filtered.append(pair)
-        
-        logger.info(f"After student ID filtering: {len(filtered)} pairs")
-        return filtered
 
 
 def create_excel_report(pairs: List[EmailPair], output_file: str):
@@ -421,11 +439,11 @@ def process_emails(gmail_userid: str, gmail_password: str, start_date: datetime,
     logger.info(f"Fetching emails from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
     # Connect to Gmail
-    client = GmailPOP3Client(gmail_userid, gmail_password)
+    client = GmailIMAPClient(gmail_userid, gmail_password)
     connect_result = client.connect()
     if connect_result is not True:
         # Return specific error message from connect method
-        return [], connect_result if isinstance(connect_result, str) else "Failed to connect to Gmail. Please check credentials and ensure POP is enabled."
+        return [], connect_result if isinstance(connect_result, str) else "Failed to connect to Gmail. Please check credentials and ensure IMAP is enabled."
     
     try:
         # Fetch emails
@@ -510,7 +528,7 @@ def main():
             end_date = datetime.strptime(sys.argv[2], '%Y-%m-%d')
         except ValueError:
             logger.error("Date format should be YYYY-MM-DD")
-            logger.error("Usage: python main.py <start_date> <end_date>")
+            logger.error("Usage: python main_imap.py <start_date> <end_date>")
             sys.exit(1)
     else:
         # Default: last 30 days
