@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail 상담 보고서 생성기</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .required::after {
+            content: " *";
+            color: #e74c3c;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="date"],
+        input[type="number"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .date-range {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .optional-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        .optional-section h3 {
+            color: #555;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-error {
+            background: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+
+        .alert-success {
+            background: #efe;
+            color: #3c3;
+            border: 1px solid #cfc;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .results-header h2 {
+            color: #333;
+        }
+
+        .download-btn {
+            background: #27ae60;
+        }
+
+        .download-btn:hover {
+            background: #229954;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .text-preview {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .date-range {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 Gmail 상담 보고서 생성기</h1>
+            <p class="subtitle">Gmail에서 상담 이메일을 수집하고 엑셀 보고서를 생성합니다</p>
+        </div>
+
+        <div class="card">
+            <div id="alert" class="alert"></div>
+
+            <form id="processForm">
+                <div class="form-group">
+                    <label class="required">Gmail 이메일 주소</label>
+                    <input type="text" id="gmail_userid" name="gmail_userid" placeholder="example@gmail.com" required>
+                    <div class="help-text">Gmail 계정 이메일 주소를 입력하세요</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="required">Gmail 앱 비밀번호</label>
+                    <input type="password" id="gmail_password" name="gmail_password" required>
+                    <div class="help-text">Gmail 앱 비밀번호를 입력하세요 (2단계 인증 필요)</div>
+                </div>
+
+                <div class="form-group">
+                    <label class="required">기간 선택</label>
+                    <div class="date-range">
+                        <div>
+                            <input type="date" id="start_date" name="start_date" required>
+                            <div class="help-text">시작일</div>
+                        </div>
+                        <div>
+                            <input type="date" id="end_date" name="end_date" required>
+                            <div class="help-text">종료일</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="optional-section">
+                    <h3>선택 옵션</h3>
+                    
+                    <div class="form-group">
+                        <label>학번 길이</label>
+                        <input type="number" id="student_id_length" name="student_id_length" value="8" min="0">
+                        <div class="help-text">학번 자릿수 (0 = 학번 필터링 안함)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>포함 단어</label>
+                        <textarea id="keywords" name="keywords" rows="2" placeholder="교수님, 안녕하세요, 입니다"></textarea>
+                        <div class="help-text">쉼표로 구분하여 입력 (비워두면 기본값: 교수님, 안녕하세요, 입니다)</div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 30px;">
+                    <button type="submit" id="submitBtn">
+                        🔍 이메일 처리 시작
+                    </button>
+                </div>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 15px; color: #666;">이메일을 처리하는 중입니다... 잠시만 기다려주세요.</p>
+            </div>
+        </div>
+
+        <div class="card results" id="results">
+            <div class="results-header">
+                <h2 id="resultsTitle">처리 결과</h2>
+                <button class="download-btn" onclick="downloadExcel()">
+                    📥 엑셀 다운로드
+                </button>
+            </div>
+            <div style="overflow-x: auto;">
+                <table id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>상담일</th>
+                            <th>시작시간</th>
+                            <th>종료시간</th>
+                            <th>장소</th>
+                            <th>상담요청 내용</th>
+                            <th>교수 답변</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let tableData = [];
+
+        // Set default dates (last 30 days)
+        window.addEventListener('DOMContentLoaded', function() {
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - 30);
+            
+            document.getElementById('end_date').valueAsDate = endDate;
+            document.getElementById('start_date').valueAsDate = startDate;
+        });
+
+        document.getElementById('processForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Hide previous results and alerts
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('alert').style.display = 'none';
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('submitBtn').disabled = true;
+            
+            try {
+                const formData = new FormData(this);
+                
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess(`${data.count}건의 상담 기록을 찾았습니다`);
+                    displayResults(data.data);
+                    tableData = data.data;
+                } else {
+                    showError(data.error || '처리 중 오류가 발생했습니다');
+                }
+            } catch (error) {
+                showError('서버와 통신 중 오류가 발생했습니다: ' + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+            }
+        });
+
+        function showError(message) {
+            const alert = document.getElementById('alert');
+            alert.className = 'alert alert-error';
+            alert.textContent = '❌ ' + message;
+            alert.style.display = 'block';
+            alert.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function showSuccess(message) {
+            const alert = document.getElementById('alert');
+            alert.className = 'alert alert-success';
+            alert.textContent = '✅ ' + message;
+            alert.style.display = 'block';
+        }
+
+        function displayResults(data) {
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+            
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row['상담일']}</td>
+                    <td>${row['시작시간']}</td>
+                    <td>${row['종료시간']}</td>
+                    <td>${row['장소']}</td>
+                    <td><div class="text-preview" title="${escapeHtml(row['상담요청 내용'])}">${escapeHtml(row['상담요청 내용'])}</div></td>
+                    <td><div class="text-preview" title="${escapeHtml(row['교수 답변'])}">${escapeHtml(row['교수 답변'])}</div></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('resultsTitle').textContent = `처리 결과 (총 ${data.length}건)`;
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function downloadExcel() {
+            try {
+                const response = await fetch('/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ data: tableData })
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `consultation_report_${new Date().toISOString().slice(0,10)}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    showSuccess('엑셀 파일이 다운로드되었습니다');
+                } else {
+                    const data = await response.json();
+                    showError(data.error || '다운로드 중 오류가 발생했습니다');
+                }
+            } catch (error) {
+                showError('다운로드 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

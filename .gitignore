@@ -39,3 +39,8 @@ ENV/
 
 # Environment variables
 .env
+
+# Flask
+instance/
+.webassets-cache
+.flask_session/
