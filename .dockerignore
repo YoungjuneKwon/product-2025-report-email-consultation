@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Output files
+*.xlsx
+*.xls
+
+# Environment
+.env
+
+# Documentation
+README.md
+example.py
+
+# Docker
+Dockerfile
+.dockerignore

@@ -277,6 +277,81 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
     logger.info(f"Excel report created: {output_file}")
 
 
+def process_emails(gmail_userid: str, gmail_password: str, start_date: datetime, end_date: datetime,
+                   keywords: List[str] = None, student_id_length: int = 8) -> Tuple[List[EmailPair], str]:
+    """
+    Process emails and return pairs and any error message.
+    
+    Args:
+        gmail_userid: Gmail user ID
+        gmail_password: Gmail password
+        start_date: Start date for email search
+        end_date: End date for email search
+        keywords: Optional list of keywords to filter by (default: ["교수님", "안녕하세요", "입니다"])
+        student_id_length: Length of student ID to filter by (default: 8)
+    
+    Returns:
+        Tuple of (list of EmailPair objects, error message or empty string)
+    """
+    if keywords is None:
+        keywords = ["교수님", "안녕하세요", "입니다"]
+    
+    # Make end_date inclusive (end of day)
+    end_date = end_date.replace(hour=23, minute=59, second=59)
+    
+    logger.info(f"Fetching emails from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+    
+    # Connect to Gmail
+    client = GmailPOP3Client(gmail_userid, gmail_password)
+    if not client.connect():
+        return [], "Failed to connect to Gmail. Please check credentials and ensure POP is enabled."
+    
+    try:
+        # Fetch emails
+        emails = client.fetch_emails(start_date, end_date)
+        
+        if not emails:
+            return [], "No emails found in the specified date range"
+        
+        # Filter emails
+        filter_obj = EmailFilter(gmail_userid)
+        
+        # Find request-response pairs
+        pairs = filter_obj.find_email_pairs(emails)
+        
+        if not pairs:
+            return [], "No email pairs found"
+        
+        # Filter by keywords
+        pairs = filter_obj.filter_by_keywords(pairs, keywords)
+        
+        if not pairs:
+            return [], "No emails matching keyword criteria"
+        
+        # Filter by student ID
+        if student_id_length > 0:
+            pattern = re.compile(rf'\d{{{student_id_length}}}')
+            filtered = []
+            for pair in pairs:
+                request_text = pair.get_request_text()
+                if pattern.search(request_text):
+                    filtered.append(pair)
+            pairs = filtered
+            logger.info(f"After student ID filtering: {len(pairs)} pairs")
+        
+        if not pairs:
+            return [], "No emails containing student ID"
+        
+        logger.info(f"Successfully processed {len(pairs)} consultation records")
+        return pairs, ""
+        
+    except Exception as e:
+        logger.error(f"Error processing emails: {e}")
+        return [], f"Error processing emails: {str(e)}"
+    finally:
+        client.close()
+
+
 def main():
     """Main function."""
     # Get credentials from environment variables
@@ -302,57 +377,16 @@ def main():
         start_date = end_date - timedelta(days=30)
         logger.info(f"No date range specified, using last 30 days")
     
-    # Make end_date inclusive (end of day)
-    end_date = end_date.replace(hour=23, minute=59, second=59)
+    # Process emails
+    pairs, error = process_emails(gmail_userid, gmail_password, start_date, end_date)
     
-    logger.info(f"Fetching emails from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-    
-    # Connect to Gmail
-    client = GmailPOP3Client(gmail_userid, gmail_password)
-    if not client.connect():
+    if error:
+        logger.error(error)
         sys.exit(1)
     
-    try:
-        # Fetch emails
-        emails = client.fetch_emails(start_date, end_date)
-        
-        if not emails:
-            logger.warning("No emails found in the specified date range")
-            return
-        
-        # Filter emails
-        filter_obj = EmailFilter(gmail_userid)
-        
-        # Find request-response pairs
-        pairs = filter_obj.find_email_pairs(emails)
-        
-        if not pairs:
-            logger.warning("No email pairs found")
-            return
-        
-        # Filter by keywords
-        keywords = ["교수님", "안녕하세요", "입니다"]
-        pairs = filter_obj.filter_by_keywords(pairs, keywords)
-        
-        if not pairs:
-            logger.warning("No emails matching keyword criteria")
-            return
-        
-        # Filter by student ID (8-digit number)
-        pairs = filter_obj.filter_by_student_id(pairs)
-        
-        if not pairs:
-            logger.warning("No emails containing student ID")
-            return
-        
-        # Create Excel report
-        output_file = f"consultation_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        create_excel_report(pairs, output_file)
-        
-        logger.info(f"Successfully processed {len(pairs)} consultation records")
-        
-    finally:
-        client.close()
+    # Create Excel report
+    output_file = f"consultation_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    create_excel_report(pairs, output_file)
 
 
 if __name__ == "__main__":

@@ -39,7 +39,31 @@ pip install -r requirements.txt
 
 ## 사용법
 
-### 환경 변수 설정
+### 웹 인터페이스 (권장)
+
+웹 브라우저를 통해 편리하게 사용할 수 있습니다:
+
+```bash
+# 의존성 설치
+pip install -r requirements.txt
+
+# 웹 서버 실행
+python app.py
+
+# 브라우저에서 접속
+# http://localhost:5000
+```
+
+웹 인터페이스에서는:
+- Gmail 이메일 주소와 앱 비밀번호 입력
+- 달력 UI로 기간 선택
+- 선택적으로 학번 길이와 키워드 지정
+- 결과를 테이블로 확인
+- 엑셀 파일 다운로드
+
+### CLI 사용 (기존 방식)
+
+#### 환경 변수 설정
 
 Gmail 계정 정보를 환경 변수로 설정:
 
@@ -53,7 +77,7 @@ export GMAIL_PASSWORD="your-app-password"
 2. 앱 비밀번호 생성 (https://myaccount.google.com/apppasswords)
 3. Gmail 설정에서 POP 활성화
 
-### 스크립트 실행
+#### 스크립트 실행
 
 ```bash
 # 날짜 범위를 지정하여 실행
@@ -63,10 +87,25 @@ python main.py 2025-01-01 2025-01-31
 python main.py
 ```
 
-### 출력
+#### 출력
 
 - Excel 파일이 `consultation_report_YYYYMMDD_HHMMSS.xlsx` 형식으로 생성됩니다.
 - 파일에는 필터링된 상담 메일 쌍들이 포함됩니다.
+
+### Docker 사용
+
+```bash
+# Docker 이미지 빌드
+docker build -t gmail-consultation-report .
+
+# Docker 컨테이너 실행
+docker run -p 5000:5000 gmail-consultation-report
+
+# 또는 Docker Compose 사용
+docker-compose up -d
+```
+
+자세한 내용은 [DOCKER_WEB_GUIDE.md](DOCKER_WEB_GUIDE.md)를 참조하세요.
 
 ## 테스트
 
@@ -80,7 +119,16 @@ python example.py
 
 ## 파일 구조
 
-- `main.py`: 메인 스크립트
+- `main.py`: 메인 스크립트 (CLI 및 핵심 로직)
+- `app.py`: Flask 웹 애플리케이션
+- `wsgi.py`: WSGI 프로덕션 서버 진입점
+- `templates/`: HTML 템플릿 디렉토리
+  - `index.html`: 메인 웹 인터페이스
+  - `404.html`: 404 에러 페이지
+  - `500.html`: 500 에러 페이지
 - `example.py`: 테스트용 예제 스크립트
 - `requirements.txt`: Python 의존성
+- `Dockerfile`: Docker 이미지 빌드 설정
+- `docker-compose.yml`: Docker Compose 설정
+- `DOCKER_WEB_GUIDE.md`: Docker 및 웹 인터페이스 사용 가이드
 - `.gitignore`: Git 제외 파일 목록
