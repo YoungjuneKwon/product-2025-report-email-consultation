@@ -58,8 +58,11 @@ python app.py
 - Gmail 이메일 주소와 앱 비밀번호 입력
 - 달력 UI로 기간 선택
 - 선택적으로 학번 길이와 키워드 지정
+- **처리 시작 시 이메일로 진행 알림 수신**
+- **백그라운드에서 처리되므로 브라우저를 닫아도 됨**
 - 결과를 테이블로 확인
 - 엑셀 파일 다운로드
+- **처리 완료 시 이메일로 결과 수신 (Excel 파일 첨부)**
 
 ### CLI 사용 (기존 방식)
 
@@ -131,4 +134,22 @@ python example.py
 - `Dockerfile`: Docker 이미지 빌드 설정
 - `docker-compose.yml`: Docker Compose 설정
 - `DOCKER_WEB_GUIDE.md`: Docker 및 웹 인터페이스 사용 가이드
+- `EMAIL_REPORT_IMPLEMENTATION.md`: 이메일 레포트 기능 구현 문서
 - `.gitignore`: Git 제외 파일 목록
+
+## 새로운 기능: 이메일 레포트
+
+웹 인터페이스를 통한 요청 시:
+
+1. **시작 알림 이메일**: 처리 시작 시 이메일로 진행 상황 알림
+   - 처리 기간
+   - 대상 이메일 수
+   - 예상 완료 시간 (이메일 1건당 2초)
+
+2. **백그라운드 처리**: 브라우저를 닫아도 서버에서 처리 계속
+
+3. **완료 알림 이메일**: 처리 완료 시 이메일로 결과 전송
+   - Excel 파일 첨부
+   - 결과 요약 테이블
+
+자세한 내용은 [EMAIL_REPORT_IMPLEMENTATION.md](EMAIL_REPORT_IMPLEMENTATION.md)를 참조하세요.
