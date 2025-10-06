@@ -310,11 +310,15 @@ class GmailIMAPClient:
         emails = []
         num_messages = len(msg_ids)
         
+        # Log initial progress information
+        logger.info(f"PROGRESS|TOTAL|{num_messages}")
+        
         # Fetch messages
         for idx, msg_id in enumerate(msg_ids, 1):
             try:
                 logger.info("=" * 40)
                 logger.info(f"Processing {folder_name} message {idx}/{num_messages}")
+                logger.info(f"PROGRESS|CURRENT|{idx}|{num_messages}")
                 
                 # First fetch headers only for quick date check
                 logger.info(f"Fetching headers for message {idx}...")
