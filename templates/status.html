@@ -495,9 +495,8 @@
             // Clear previous logs
             document.getElementById('progressLogs').innerHTML = '';
             document.getElementById('progressContainer').style.display = 'block';
-            document.getElementById('progressBarContainer').style.display = 'none';
             
-            // Reset progress
+            // Reset progress (but keep bar visible if we have data)
             document.getElementById('totalEmails').textContent = '0';
             document.getElementById('currentEmail').textContent = '0';
             document.getElementById('progressBar').style.width = '0%';
@@ -535,6 +534,31 @@
                     </div>
                 `;
                 
+                // Update progress bar with existing data if available
+                if (statusInfo.email_count && statusInfo.email_count > 0) {
+                    document.getElementById('progressBarContainer').style.display = 'block';
+                    document.getElementById('totalEmails').textContent = statusInfo.email_count;
+                    
+                    // For completed requests, show full progress
+                    if (statusInfo.status === 'completed') {
+                        document.getElementById('currentEmail').textContent = statusInfo.email_count;
+                        document.getElementById('progressBar').style.width = '100%';
+                        document.getElementById('progressPercentage').textContent = '100%';
+                    } else if (statusInfo.result_count) {
+                        // For other statuses, show current progress if available
+                        const current = statusInfo.result_count;
+                        const total = statusInfo.email_count;
+                        document.getElementById('currentEmail').textContent = current;
+                        
+                        const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+                        document.getElementById('progressBar').style.width = percentage + '%';
+                        document.getElementById('progressPercentage').textContent = percentage + '%';
+                    }
+                } else {
+                    // Hide progress bar if no email count data
+                    document.getElementById('progressBarContainer').style.display = 'none';
+                }
+                
                 // Connect to SSE stream if status is pending or processing
                 if (statusInfo.status === 'pending' || statusInfo.status === 'processing') {
                     if (statusInfo.session_id) {
@@ -546,6 +570,11 @@
                     addLogLine(`요청 상태: ${statusText}`);
                     if (statusInfo.status === 'completed') {
                         addLogLine('처리가 완료되었습니다. 결과는 이메일로 전송되었습니다.');
+                    } else if (statusInfo.status === 'failed') {
+                        addLogLine('처리 중 오류가 발생했습니다.');
+                        if (statusInfo.error) {
+                            addLogLine(`오류 내용: ${statusInfo.error}`);
+                        }
                     }
                 }
                 
@@ -642,11 +671,16 @@
             
             if (parts[0] === 'TOTAL') {
                 const total = parseInt(parts[1]);
-                document.getElementById('totalEmails').textContent = total;
-                document.getElementById('progressBarContainer').style.display = 'block';
+                if (total > 0) {
+                    document.getElementById('totalEmails').textContent = total;
+                    document.getElementById('progressBarContainer').style.display = 'block';
+                }
             } else if (parts[0] === 'CURRENT') {
                 const current = parseInt(parts[1]);
                 const total = parseInt(parts[2]);
+                
+                // Ensure progress bar is visible
+                document.getElementById('progressBarContainer').style.display = 'block';
                 
                 document.getElementById('currentEmail').textContent = current;
                 document.getElementById('totalEmails').textContent = total;
@@ -664,6 +698,14 @@
                 eventSource = null;
             }
             document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('progressBarContainer').style.display = 'none';
+            
+            // Reset all progress values
+            document.getElementById('totalEmails').textContent = '0';
+            document.getElementById('currentEmail').textContent = '0';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressPercentage').textContent = '0%';
+            document.getElementById('progressLogs').innerHTML = '';
         }
 
         function showError(message) {
