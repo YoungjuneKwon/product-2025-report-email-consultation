@@ -37,6 +37,9 @@ ENV/
 *.xlsx
 *.xls
 
+# Screenshots and temporary demo files
+screenshots/
+
 # Environment variables
 .env
 

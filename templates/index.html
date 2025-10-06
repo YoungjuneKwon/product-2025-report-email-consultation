@@ -508,6 +508,8 @@
                             <th>시작시간</th>
                             <th>종료시간</th>
                             <th>장소</th>
+                            <th>학생</th>
+                            <th>학번</th>
                             <th>상담요청 내용</th>
                             <th>교수 답변</th>
                         </tr>
@@ -747,6 +749,8 @@
                     <td>${row['시작시간']}</td>
                     <td>${row['종료시간']}</td>
                     <td>${row['장소']}</td>
+                    <td>${escapeHtml(row['학생'] || '')}</td>
+                    <td>${escapeHtml(row['학번'] || '')}</td>
                     <td><div class="text-preview" title="${escapeHtml(row['상담요청 내용'])}">${escapeHtml(row['상담요청 내용'])}</div></td>
                     <td><div class="text-preview" title="${escapeHtml(row['교수 답변'])}">${escapeHtml(row['교수 답변'])}</div></td>
                 `;
