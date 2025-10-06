@@ -675,9 +675,22 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    showSuccess(`${data.count}건의 상담 기록을 찾았습니다`);
-                    displayResults(data.data);
-                    tableData = data.data;
+                    // Check if this is background processing
+                    if (data.background) {
+                        // Background processing started
+                        showSuccess(`처리가 시작되었습니다. ${data.email_count}개의 이메일을 처리 중입니다. 완료되면 이메일로 결과를 보내드립니다.`);
+                        // Keep the event source open to show logs
+                        // Don't close it yet
+                    } else {
+                        // Close the event source for non-background mode
+                        if (eventSource) {
+                            eventSource.close();
+                            eventSource = null;
+                        }
+                        showSuccess(`${data.count}건의 상담 기록을 찾았습니다`);
+                        displayResults(data.data);
+                        tableData = data.data;
+                    }
                 } else {
                     // Check if it's an authentication error
                     if (data.errorType === 'AUTH_FAILED') {
