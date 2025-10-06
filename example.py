@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from main import EmailPair, EmailFilter, create_excel_report
 
 
-def create_sample_email(subject, from_addr, to_addr, body, msg_id, in_reply_to=None, date=None):
+def create_sample_email(subject, from_addr, to_addr, body, msg_id, in_reply_to=None, date=None, folder=None):
     """Create a sample email message for testing."""
     msg = EmailMessage()
     msg['Subject'] = subject
@@ -28,6 +28,9 @@ def create_sample_email(subject, from_addr, to_addr, body, msg_id, in_reply_to=N
     if in_reply_to:
         msg['In-Reply-To'] = in_reply_to
         msg['References'] = in_reply_to
+    
+    if folder:
+        msg['X-Folder-Name'] = folder
     
     msg.set_content(body)
     return msg
@@ -50,7 +53,8 @@ def main():
         to_addr=professor_email,
         body="교수님 안녕하세요. 저는 20251234 학번 김철수입니다. 상담 요청드립니다.",
         msg_id="<request1@university.edu>",
-        date=datetime(2025, 1, 15, 10, 0, 0)
+        date=datetime(2025, 1, 15, 10, 0, 0),
+        folder="INBOX"
     )
     emails.append(request1)
     
@@ -61,7 +65,8 @@ def main():
         body="네, 알겠습니다. 연구실로 오세요.",
         msg_id="<response1@university.edu>",
         in_reply_to="<request1@university.edu>",
-        date=datetime(2025, 1, 15, 14, 30, 0)
+        date=datetime(2025, 1, 15, 14, 30, 0),
+        folder="Sent"
     )
     emails.append(response1)
     
@@ -72,7 +77,8 @@ def main():
         to_addr=professor_email,
         body="교수님 안녕하세요. 저는 학번 20259876입니다. 과제 관련 질문드립니다.",
         msg_id="<request2@university.edu>",
-        date=datetime(2025, 1, 16, 9, 0, 0)
+        date=datetime(2025, 1, 16, 9, 0, 0),
+        folder="INBOX"
     )
     emails.append(request2)
     
@@ -83,7 +89,8 @@ def main():
         body="답변드립니다. 다음과 같이 진행하시면 됩니다.",
         msg_id="<response2@university.edu>",
         in_reply_to="<request2@university.edu>",
-        date=datetime(2025, 1, 16, 15, 0, 0)
+        date=datetime(2025, 1, 16, 15, 0, 0),
+        folder="Sent"
     )
     emails.append(response2)
     
@@ -94,7 +101,8 @@ def main():
         to_addr=professor_email,
         body="학번 20251111 문의사항 있습니다.",
         msg_id="<request3@university.edu>",
-        date=datetime(2025, 1, 17, 10, 0, 0)
+        date=datetime(2025, 1, 17, 10, 0, 0),
+        folder="INBOX"
     )
     emails.append(request3)
     
@@ -105,7 +113,8 @@ def main():
         body="답변드립니다.",
         msg_id="<response3@university.edu>",
         in_reply_to="<request3@university.edu>",
-        date=datetime(2025, 1, 17, 11, 0, 0)
+        date=datetime(2025, 1, 17, 11, 0, 0),
+        folder="Sent"
     )
     emails.append(response3)
     
@@ -116,7 +125,8 @@ def main():
         to_addr=professor_email,
         body="교수님 안녕하세요. 저는 김영희입니다. 상담 받고 싶습니다.",
         msg_id="<request4@university.edu>",
-        date=datetime(2025, 1, 18, 10, 0, 0)
+        date=datetime(2025, 1, 18, 10, 0, 0),
+        folder="INBOX"
     )
     emails.append(request4)
     
@@ -127,7 +137,8 @@ def main():
         body="네, 가능합니다.",
         msg_id="<response4@university.edu>",
         in_reply_to="<request4@university.edu>",
-        date=datetime(2025, 1, 18, 14, 0, 0)
+        date=datetime(2025, 1, 18, 14, 0, 0),
+        folder="Sent"
     )
     emails.append(response4)
     
@@ -160,6 +171,9 @@ def main():
             print(f"\nPair {i}:")
             print(f"  Date: {pair.get_date()}")
             print(f"  Time: {pair.get_start_time()} - {pair.get_end_time()}")
+            print(f"  From: {pair.get_request_from()}")
+            print(f"  To: {pair.get_request_to()}")
+            print(f"  Subject: {pair.get_request_subject()}")
             print(f"  Request preview: {pair.get_request_text()[:50]}...")
             print(f"  Response preview: {pair.get_response_text()[:50]}...")
     else:
