@@ -69,12 +69,6 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/demo')
-def demo():
-    """Render the demo page."""
-    return render_template('demo.html')
-
-
 @app.route('/stream/<session_id>')
 def stream(session_id):
     """Stream logs to the client using Server-Sent Events."""
