@@ -65,6 +65,18 @@ class EmailPair:
         """Extract plain text from response email body."""
         return self._get_email_body(self.response)
     
+    def get_request_from(self) -> str:
+        """Get sender email address from request email."""
+        return self.request.get('From', '')
+    
+    def get_request_to(self) -> str:
+        """Get recipient email address from request email."""
+        return self.request.get('To', '')
+    
+    def get_request_subject(self) -> str:
+        """Get subject from request email."""
+        return self.request.get('Subject', '')
+    
     def _get_email_body(self, msg: email.message.EmailMessage) -> str:
         """Extract plain text body from email message."""
         body = ""
@@ -787,6 +799,9 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
         logger.info(f"  Date: {pair.get_date()}")
         logger.info(f"  Start Time: {pair.get_start_time()}")
         logger.info(f"  End Time: {pair.get_end_time()}")
+        logger.info(f"  From: {pair.get_request_from()}")
+        logger.info(f"  To: {pair.get_request_to()}")
+        logger.info(f"  Subject: {pair.get_request_subject()}")
         logger.info(f"  Request length: {len(pair.get_request_text())} characters")
         logger.info(f"  Response length: {len(pair.get_response_text())} characters")
         
@@ -795,6 +810,9 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
             '시작시간': pair.get_start_time(),
             '종료시간': pair.get_end_time(),
             '장소': '연구실',
+            '발신자 이메일 주소': pair.get_request_from(),
+            '수신자 이메일 주소': pair.get_request_to(),
+            '메일의 제목': pair.get_request_subject(),
             '상담요청 내용': pair.get_request_text(),
             '교수 답변': pair.get_response_text()
         })
