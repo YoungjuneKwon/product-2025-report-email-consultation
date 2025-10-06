@@ -843,6 +843,13 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
     logger.info(f"\nCreating DataFrame with {len(data)} rows...")
     df = pd.DataFrame(data)
     
+    # Ensure student ID is treated as string (not numeric)
+    # Replace empty strings with actual empty strings for display
+    if '학번' in df.columns:
+        df['학번'] = df['학번'].fillna('')
+    if '학생' in df.columns:
+        df['학생'] = df['학생'].fillna('')
+    
     # Export to Excel
     logger.info(f"Exporting to Excel file: {output_file}")
     df.to_excel(output_file, index=False, engine='openpyxl')
