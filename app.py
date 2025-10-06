@@ -5,13 +5,15 @@ Flask Web Application for Gmail Consultation Report Generator
 Provides a web interface to process consultation emails and generate Excel reports.
 """
 
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, Response, stream_with_context
 from datetime import datetime
 import logging
 import os
 import io
 from typing import List
 import pandas as pd
+import queue
+import threading
 
 from main import process_emails, EmailPair
 
@@ -26,11 +28,61 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max request size
 
+# Store for streaming logs
+log_queues = {}
+
+
+# Store for streaming logs
+log_queues = {}
+
+
+class QueueHandler(logging.Handler):
+    """Custom logging handler that puts log records into a queue."""
+    
+    def __init__(self, log_queue):
+        super().__init__()
+        self.log_queue = log_queue
+    
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.log_queue.put(msg)
+        except Exception:
+            self.handleError(record)
+
 
 @app.route('/')
 def index():
     """Render the main page."""
     return render_template('index.html')
+
+
+@app.route('/stream/<session_id>')
+def stream(session_id):
+    """Stream logs to the client using Server-Sent Events."""
+    
+    def generate():
+        # Create a queue for this session
+        log_queue = queue.Queue()
+        log_queues[session_id] = log_queue
+        
+        try:
+            while True:
+                # Wait for log messages
+                try:
+                    msg = log_queue.get(timeout=30)
+                    if msg is None:  # Sentinel to end the stream
+                        break
+                    yield f"data: {msg}\n\n"
+                except queue.Empty:
+                    # Send a heartbeat to keep connection alive
+                    yield ": heartbeat\n\n"
+        finally:
+            # Clean up the queue when done
+            if session_id in log_queues:
+                del log_queues[session_id]
+    
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 
 @app.route('/process', methods=['POST'])
@@ -42,6 +94,7 @@ def process():
         gmail_password = request.form.get('gmail_password', '').strip()
         start_date_str = request.form.get('start_date', '').strip()
         end_date_str = request.form.get('end_date', '').strip()
+        session_id = request.form.get('session_id', '')
         
         # Optional parameters
         student_id_length_str = request.form.get('student_id_length', '8').strip()
@@ -78,58 +131,94 @@ def process():
         if keywords_str:
             keywords = [kw.strip() for kw in keywords_str.split(',') if kw.strip()]
         
-        # Process emails
-        logger.info(f"Processing emails for {gmail_userid} from {start_date_str} to {end_date_str}")
-        pairs, error = process_emails(
-            gmail_userid, 
-            gmail_password, 
-            start_date, 
-            end_date,
-            keywords=keywords,
-            student_id_length=student_id_length
-        )
-        
-        if error:
-            logger.error(f"Error processing emails: {error}")
+        # Set up logging to queue if session_id is provided
+        queue_handler = None
+        if session_id and session_id in log_queues:
+            log_queue = log_queues[session_id]
+            queue_handler = QueueHandler(log_queue)
+            queue_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
             
-            # Check if it's an authentication error
-            if error == "AUTH_FAILED":
-                return jsonify({
-                    'error': error,
-                    'errorType': 'AUTH_FAILED',
-                    'message': 'Gmail 인증에 실패했습니다. 앱 비밀번호를 확인해주세요.'
-                }), 401
-            elif error == "CONNECTION_FAILED":
-                return jsonify({
-                    'error': error,
-                    'errorType': 'AUTH_FAILED',  # Treat as auth error for user guidance
-                    'message': 'Gmail 연결에 실패했습니다. 인증 정보를 확인해주세요.'
-                }), 401
-            
-            return jsonify({'error': error}), 400
+            # Add handler to root logger and main module logger
+            root_logger = logging.getLogger()
+            main_logger = logging.getLogger('main')
+            root_logger.addHandler(queue_handler)
+            main_logger.addHandler(queue_handler)
         
-        # Convert pairs to table data
-        table_data = []
-        for pair in pairs:
-            table_data.append({
-                '상담일': pair.get_date(),
-                '시작시간': pair.get_start_time(),
-                '종료시간': pair.get_end_time(),
-                '장소': '연구실',
-                '상담요청 내용': pair.get_request_text(),
-                '교수 답변': pair.get_response_text()
+        try:
+            # Process emails
+            logger.info(f"Processing emails for {gmail_userid} from {start_date_str} to {end_date_str}")
+            pairs, error = process_emails(
+                gmail_userid, 
+                gmail_password, 
+                start_date, 
+                end_date,
+                keywords=keywords,
+                student_id_length=student_id_length
+            )
+            
+            if error:
+                logger.error(f"Error processing emails: {error}")
+                
+                # Send end signal to stream
+                if session_id and session_id in log_queues:
+                    log_queues[session_id].put(None)
+                
+                # Check if it's an authentication error
+                if error == "AUTH_FAILED":
+                    return jsonify({
+                        'error': error,
+                        'errorType': 'AUTH_FAILED',
+                        'message': 'Gmail 인증에 실패했습니다. 앱 비밀번호를 확인해주세요.'
+                    }), 401
+                elif error == "CONNECTION_FAILED":
+                    return jsonify({
+                        'error': error,
+                        'errorType': 'AUTH_FAILED',  # Treat as auth error for user guidance
+                        'message': 'Gmail 연결에 실패했습니다. 인증 정보를 확인해주세요.'
+                    }), 401
+                
+                return jsonify({'error': error}), 400
+            
+            # Convert pairs to table data
+            table_data = []
+            for pair in pairs:
+                table_data.append({
+                    '상담일': pair.get_date(),
+                    '시작시간': pair.get_start_time(),
+                    '종료시간': pair.get_end_time(),
+                    '장소': '연구실',
+                    '상담요청 내용': pair.get_request_text(),
+                    '교수 답변': pair.get_response_text()
+                })
+            
+            logger.info(f"Successfully processed {len(pairs)} consultation records")
+            
+            # Send end signal to stream
+            if session_id and session_id in log_queues:
+                log_queues[session_id].put(None)
+            
+            return jsonify({
+                'success': True,
+                'count': len(pairs),
+                'data': table_data
             })
         
-        logger.info(f"Successfully processed {len(pairs)} consultation records")
-        
-        return jsonify({
-            'success': True,
-            'count': len(pairs),
-            'data': table_data
-        })
+        finally:
+            # Remove queue handler
+            if queue_handler:
+                root_logger = logging.getLogger()
+                main_logger = logging.getLogger('main')
+                root_logger.removeHandler(queue_handler)
+                main_logger.removeHandler(queue_handler)
         
     except Exception as e:
         logger.exception(f"Unexpected error in process: {e}")
+        
+        # Send end signal to stream
+        session_id = request.form.get('session_id', '')
+        if session_id and session_id in log_queues:
+            log_queues[session_id].put(None)
+        
         return jsonify({'error': f'서버 오류가 발생했습니다: {str(e)}'}), 500
 
 

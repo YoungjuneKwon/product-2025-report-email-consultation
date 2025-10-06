@@ -199,6 +199,51 @@
             100% { transform: rotate(360deg); }
         }
 
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .progress-container h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .progress-logs {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .progress-logs .log-line {
+            margin-bottom: 5px;
+        }
+
+        .progress-logs .log-info {
+            color: #4ec9b0;
+        }
+
+        .progress-logs .log-warning {
+            color: #dcdcaa;
+        }
+
+        .progress-logs .log-error {
+            color: #f48771;
+        }
+
         .results {
             display: none;
         }
@@ -359,6 +404,11 @@
                 <div class="spinner"></div>
                 <p style="margin-top: 15px; color: #666;">이메일을 처리하는 중입니다... 잠시만 기다려주세요.</p>
             </div>
+
+            <div class="progress-container" id="progressContainer">
+                <h3>📋 처리 진행 상황</h3>
+                <div class="progress-logs" id="progressLogs"></div>
+            </div>
         </div>
 
         <div class="card results" id="results">
@@ -389,6 +439,7 @@
 
     <script>
         let tableData = [];
+        let eventSource = null;
 
         // Toggle password visibility
         function togglePassword() {
@@ -412,19 +463,67 @@
             document.getElementById('start_date').valueAsDate = startDate;
         });
 
+        function generateSessionId() {
+            return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function addLogLine(message) {
+            const logsContainer = document.getElementById('progressLogs');
+            const logLine = document.createElement('div');
+            logLine.className = 'log-line';
+            
+            // Colorize based on log level
+            if (message.includes('ERROR')) {
+                logLine.classList.add('log-error');
+            } else if (message.includes('WARNING')) {
+                logLine.classList.add('log-warning');
+            } else {
+                logLine.classList.add('log-info');
+            }
+            
+            logLine.textContent = message;
+            logsContainer.appendChild(logLine);
+            
+            // Auto-scroll to bottom
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
         document.getElementById('processForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             // Hide previous results and alerts
             document.getElementById('results').style.display = 'none';
             document.getElementById('alert').style.display = 'none';
+            document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('progressLogs').innerHTML = '';
             
             // Show loading
             document.getElementById('loading').style.display = 'block';
             document.getElementById('submitBtn').disabled = true;
             
+            // Generate session ID
+            const sessionId = generateSessionId();
+            
+            // Start listening to the event stream
+            eventSource = new EventSource(`/stream/${sessionId}`);
+            
+            eventSource.onmessage = function(event) {
+                // Show progress container when first message arrives
+                document.getElementById('progressContainer').style.display = 'block';
+                addLogLine(event.data);
+            };
+            
+            eventSource.onerror = function(error) {
+                console.error('EventSource error:', error);
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+            };
+            
             try {
                 const formData = new FormData(this);
+                formData.append('session_id', sessionId);
                 
                 const response = await fetch('/process', {
                     method: 'POST',
@@ -432,6 +531,12 @@
                 });
                 
                 const data = await response.json();
+                
+                // Close the event source
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
                 
                 if (response.ok) {
                     showSuccess(`${data.count}건의 상담 기록을 찾았습니다`);
@@ -446,6 +551,11 @@
                     }
                 }
             } catch (error) {
+                // Close the event source
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
                 showError('서버와 통신 중 오류가 발생했습니다: ' + error.message);
             } finally {
                 document.getElementById('loading').style.display = 'none';
