@@ -10,7 +10,7 @@ from datetime import datetime
 import logging
 import os
 import io
-from typing import List
+from typing import List, Dict
 import pandas as pd
 import queue
 import threading
@@ -19,6 +19,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
+import uuid
 
 from main import process_emails, EmailPair
 
@@ -36,9 +37,9 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max request size
 # Store for streaming logs
 log_queues = {}
 
-
-# Store for streaming logs
-log_queues = {}
+# Store for request status tracking
+# Format: {request_id: {status, session_id, created_at, updated_at, email_count, result_count, error}}
+request_status = {}
 
 
 class QueueHandler(logging.Handler):
@@ -119,7 +120,7 @@ def send_email_via_smtp(gmail_userid: str, gmail_password: str, to_email: str,
 
 
 def send_start_notification(gmail_userid: str, gmail_password: str, 
-                           start_date: str, end_date: str, email_count: int):
+                           start_date: str, end_date: str, email_count: int, request_id: str = None):
     """
     Send notification email when processing starts.
     
@@ -129,10 +130,15 @@ def send_start_notification(gmail_userid: str, gmail_password: str,
         start_date: Start date string
         end_date: End date string
         email_count: Number of emails to process
+        request_id: Request ID for tracking (optional)
     """
     estimated_time = email_count * 2  # 2 seconds per email
     estimated_minutes = estimated_time // 60
     estimated_seconds = estimated_time % 60
+    
+    request_info = ""
+    if request_id:
+        request_info = f"<li><strong>요청 ID:</strong> {request_id}</li>"
     
     subject = "이메일 상담 보고서 처리 시작"
     body = f"""
@@ -144,6 +150,7 @@ def send_start_notification(gmail_userid: str, gmail_password: str,
             <li><strong>기간:</strong> {start_date} ~ {end_date}</li>
             <li><strong>대상 이메일 수:</strong> {email_count}건</li>
             <li><strong>예상 완료 시간:</strong> 약 {estimated_minutes}분 {estimated_seconds}초</li>
+            {request_info}
         </ul>
         <p>처리가 완료되면 결과를 이메일로 보내드리겠습니다.</p>
     </body>
@@ -154,7 +161,7 @@ def send_start_notification(gmail_userid: str, gmail_password: str,
 
 
 def send_completion_notification(gmail_userid: str, gmail_password: str, 
-                                 pairs: List[EmailPair], excel_path: str):
+                                 pairs: List[EmailPair], excel_path: str, request_id: str = None):
     """
     Send notification email when processing completes with Excel attachment.
     
@@ -163,6 +170,7 @@ def send_completion_notification(gmail_userid: str, gmail_password: str,
         gmail_password: Gmail app password
         pairs: List of processed email pairs
         excel_path: Path to Excel file to attach
+        request_id: Request ID for tracking (optional)
     """
     # Create HTML table from pairs
     table_rows = ""
@@ -178,6 +186,10 @@ def send_completion_notification(gmail_userid: str, gmail_password: str,
             <td>{pair.get_request_subject()}</td>
         </tr>
         """
+    
+    request_info = ""
+    if request_id:
+        request_info = f"<p><strong>요청 ID:</strong> {request_id}</p>"
     
     subject = "이메일 상담 보고서 처리 완료"
     body = f"""
@@ -206,6 +218,7 @@ def send_completion_notification(gmail_userid: str, gmail_password: str,
     <body>
         <h2>이메일 상담 보고서 처리가 완료되었습니다</h2>
         <p><strong>총 {len(pairs)}건의 상담 기록이 처리되었습니다.</strong></p>
+        {request_info}
         <p>상세 결과는 첨부된 엑셀 파일을 확인해주세요.</p>
         
         <h3>처리 결과 요약</h3>
@@ -234,7 +247,8 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
                               keywords: List[str], student_id_length: int,
                               email_count: int,
                               strict_mode: bool = True,
-                              session_id: str = None):
+                              session_id: str = None,
+                              request_id: str = None):
     """
     Process emails in background thread and send notification emails.
     
@@ -250,10 +264,16 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         email_count: Number of emails to process (for notification)
         strict_mode: Whether to use strict student ID filtering
         session_id: Optional session ID for logging
+        request_id: Optional request ID for tracking
     """
     queue_handler = None
     
     try:
+        # Update request status to processing
+        if request_id and request_id in request_status:
+            request_status[request_id]['status'] = 'processing'
+            request_status[request_id]['updated_at'] = datetime.now().isoformat()
+        
         # Set up logging to queue if session_id is provided
         if session_id and session_id in log_queues:
             log_queue = log_queues[session_id]
@@ -268,7 +288,7 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         
         # Send start notification email
         logger.info("Sending start notification email...")
-        send_start_notification(gmail_userid, gmail_password, start_date_str, end_date_str, email_count)
+        send_start_notification(gmail_userid, gmail_password, start_date_str, end_date_str, email_count, request_id)
         logger.info("Start notification sent successfully")
         
         # Process emails
@@ -286,10 +306,20 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         
         if error:
             logger.error(f"Error processing emails: {error}")
+            # Update request status to failed
+            if request_id and request_id in request_status:
+                request_status[request_id]['status'] = 'failed'
+                request_status[request_id]['error'] = str(error)
+                request_status[request_id]['updated_at'] = datetime.now().isoformat()
             return
         
         if not pairs:
             logger.warning("No email pairs found")
+            # Update request status to completed (but with no results)
+            if request_id and request_id in request_status:
+                request_status[request_id]['status'] = 'completed'
+                request_status[request_id]['result_count'] = 0
+                request_status[request_id]['updated_at'] = datetime.now().isoformat()
             return
         
         # Create Excel file
@@ -320,8 +350,14 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         
         # Send completion notification email with attachment
         logger.info("Sending completion notification email...")
-        send_completion_notification(gmail_userid, gmail_password, pairs, output_file)
+        send_completion_notification(gmail_userid, gmail_password, pairs, output_file, request_id)
         logger.info("Completion notification sent successfully")
+        
+        # Update request status to completed
+        if request_id and request_id in request_status:
+            request_status[request_id]['status'] = 'completed'
+            request_status[request_id]['result_count'] = len(pairs)
+            request_status[request_id]['updated_at'] = datetime.now().isoformat()
         
         # Clean up Excel file after sending
         try:
@@ -332,6 +368,11 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         
     except Exception as e:
         logger.exception(f"Error in background processing: {e}")
+        # Update request status to failed
+        if request_id and request_id in request_status:
+            request_status[request_id]['status'] = 'failed'
+            request_status[request_id]['error'] = str(e)
+            request_status[request_id]['updated_at'] = datetime.now().isoformat()
     
     finally:
         # Remove queue handler
@@ -479,23 +520,38 @@ def process():
             logger.exception(f"Error during initial check: {e}")
             return jsonify({'error': f'초기 연결 중 오류가 발생했습니다: {str(e)}'}), 500
         
+        # Generate request ID
+        request_id = str(uuid.uuid4())
+        
+        # Store initial request status
+        request_status[request_id] = {
+            'status': 'pending',
+            'session_id': session_id,
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat(),
+            'email_count': email_count,
+            'result_count': 0,
+            'error': None
+        }
+        
         # Start background processing
         thread = threading.Thread(
             target=process_emails_background,
             args=(gmail_userid, gmail_password, start_date, end_date, 
                   start_date_str, end_date_str, keywords, student_id_length, 
-                  email_count, strict_mode, session_id),
+                  email_count, strict_mode, session_id, request_id),
             daemon=True
         )
         thread.start()
         logger.info("Background processing started")
         
-        # Return immediate response
+        # Return immediate response with request ID
         return jsonify({
             'success': True,
             'message': f'처리가 시작되었습니다. 총 {email_count}개의 이메일을 처리합니다.',
             'email_count': email_count,
-            'background': True
+            'background': True,
+            'request_id': request_id
         })
         
     except Exception as e:
@@ -543,6 +599,36 @@ def download():
     except Exception as e:
         logger.exception(f"Error generating Excel file: {e}")
         return jsonify({'error': f'엑셀 파일 생성 중 오류가 발생했습니다: {str(e)}'}), 500
+
+
+@app.route('/api/request/<request_id>', methods=['GET'])
+def get_request_status(request_id):
+    """Get status of a specific request by ID."""
+    if request_id not in request_status:
+        return jsonify({'error': '요청 ID를 찾을 수 없습니다'}), 404
+    
+    return jsonify({
+        'request_id': request_id,
+        **request_status[request_id]
+    })
+
+
+@app.route('/api/requests', methods=['GET'])
+def list_requests():
+    """List all tracked requests."""
+    requests_list = [
+        {'request_id': req_id, **req_data}
+        for req_id, req_data in request_status.items()
+    ]
+    # Sort by created_at descending (newest first)
+    requests_list.sort(key=lambda x: x['created_at'], reverse=True)
+    return jsonify({'requests': requests_list})
+
+
+@app.route('/status')
+def status_page():
+    """Render the status monitoring page."""
+    return render_template('status.html')
 
 
 @app.errorhandler(404)
