@@ -669,21 +669,38 @@
             
             // Generate session ID
             const sessionId = generateSessionId();
+            console.log('Generated session ID:', sessionId);
             
             // Start listening to the event stream
             eventSource = new EventSource(`/stream/${sessionId}`);
+            console.log('EventSource created for:', `/stream/${sessionId}`);
+            
+            eventSource.onopen = function(event) {
+                console.log('EventSource connection opened');
+                // Show progress container when connection opens
+                document.getElementById('progressContainer').style.display = 'block';
+                addLogLine('로그 스트림 연결이 성공했습니다.');
+            };
             
             eventSource.onmessage = function(event) {
-                // Show progress container when first message arrives
-                document.getElementById('progressContainer').style.display = 'block';
+                console.log('EventSource message received:', event.data);
                 addLogLine(event.data);
             };
             
             eventSource.onerror = function(error) {
                 console.error('EventSource error:', error);
-                if (eventSource) {
-                    eventSource.close();
-                    eventSource = null;
+                console.error('EventSource readyState:', eventSource ? eventSource.readyState : 'null');
+                
+                if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+                    addLogLine('로그 스트림 연결이 종료되었습니다.');
+                } else if (eventSource && eventSource.readyState === EventSource.CONNECTING) {
+                    addLogLine('로그 스트림 재연결을 시도하고 있습니다...');
+                } else {
+                    addLogLine('로그 스트림 연결에 오류가 발생했습니다.');
+                    if (eventSource) {
+                        eventSource.close();
+                        eventSource = null;
+                    }
                 }
             };
             
@@ -720,7 +737,7 @@
                         }
                         
                         // Background processing started
-                        showSuccess(`처리가 시작되었습니다. ${data.email_count}개의 이메일을 처리 중입니다. 완료되면 이메일로 결과를 보내드립니다.${data.request_id ? ' 요청 ID: ' + data.request_id : ''}`);
+                        showSuccessWithRequestId(`처리가 시작되었습니다. 완료되면 이메일로 결과를 보내드립니다.`, data.request_id);
                         // Keep the event source open to show logs
                         // Don't close it yet
                     } else {
@@ -805,6 +822,17 @@
             const alert = document.getElementById('alert');
             alert.className = 'alert alert-success';
             alert.textContent = '✅ ' + message;
+            alert.style.display = 'block';
+        }
+
+        function showSuccessWithRequestId(message, requestId) {
+            const alert = document.getElementById('alert');
+            alert.className = 'alert alert-success';
+            if (requestId) {
+                alert.innerHTML = `✅ ${message} <a href="/status?request_id=${requestId}" target="_blank" style="color: #2c5530; text-decoration: underline; font-weight: bold;">요청 ID: ${requestId} (진행상황 보기)</a>`;
+            } else {
+                alert.textContent = '✅ ' + message;
+            }
             alert.style.display = 'block';
         }
 

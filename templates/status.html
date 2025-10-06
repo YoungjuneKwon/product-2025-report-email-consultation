@@ -656,6 +656,15 @@
         window.addEventListener('DOMContentLoaded', function() {
             loadRequestList();
             
+            // Check if request_id is provided in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const requestId = urlParams.get('request_id');
+            if (requestId) {
+                // Auto-monitor the specific request
+                document.getElementById('requestIdInput').value = requestId;
+                addRequestId();
+            }
+            
             // Allow Enter key to add request
             document.getElementById('requestIdInput').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {

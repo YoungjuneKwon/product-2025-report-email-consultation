@@ -275,29 +275,84 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
             request_status[request_id]['updated_at'] = datetime.now().isoformat()
         
         # Set up logging to queue if session_id is provided
-        if session_id and session_id in log_queues:
-            log_queue = log_queues[session_id]
+        if session_id:
+            # Ensure queue exists for this session
+            log_queue = log_queues.get(session_id, None)
+
+            if log_queue is None:
+                log_queue = queue.Queue()
+                log_queues[session_id] = log_queue
+
             queue_handler = QueueHandler(log_queue)
             queue_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
             
             # Add handler to root logger and main module logger
             root_logger = logging.getLogger()
             main_logger = logging.getLogger('main')
+            app_logger = logging.getLogger(__name__)
+            
+            # Set the level to INFO to ensure all messages are captured
+            queue_handler.setLevel(logging.INFO)
+            
             root_logger.addHandler(queue_handler)
             main_logger.addHandler(queue_handler)
+            app_logger.addHandler(queue_handler)
+            
+            # Send initial message to stream
+            log_queue.put("백그라운드 처리가 시작되었습니다...")
+        
+        # Calculate email count if not provided (email_count = 0)
+        if email_count == 0:
+            logger.info("이메일 수를 계산하고 있습니다...")
+            try:
+                from main import GmailIMAPClient
+                logger.info("Gmail IMAP 클라이언트를 초기화하고 있습니다...")
+                client = GmailIMAPClient(gmail_userid, gmail_password)
+                logger.info("Gmail 서버에 연결 중입니다...")
+                connect_result = client.connect()
+                if connect_result is not True:
+                    logger.error(f"Gmail 연결 실패: {connect_result}")
+                    if request_id and request_id in request_status:
+                        request_status[request_id]['status'] = 'failed'
+                        request_status[request_id]['error'] = f'Gmail 연결 실패: {connect_result}'
+                        request_status[request_id]['updated_at'] = datetime.now().isoformat()
+                    return
+                logger.info("Gmail에 연결되었습니다. 이메일을 검색하고 있습니다...")
+                logger.info(f"검색 기간: {start_date_str} ~ {end_date_str}")
+                
+                emails = client.fetch_emails(start_date, end_date)
+                email_count = len(emails)
+                logger.info(f"이메일 검색이 완료되었습니다. 총 {email_count}건의 이메일을 찾았습니다")
+                client.close()
+                logger.info("Gmail 연결을 종료했습니다")
+                
+                logger.info(f"처리할 이메일 {email_count}건을 찾았습니다")
+                
+                # Update request status with email count
+                if request_id and request_id in request_status:
+                    request_status[request_id]['email_count'] = email_count
+                    request_status[request_id]['updated_at'] = datetime.now().isoformat()
+                    
+            except Exception as e:
+                logger.exception(f"이메일 수 계산 중 오류: {e}")
+                if request_id and request_id in request_status:
+                    request_status[request_id]['status'] = 'failed'
+                    request_status[request_id]['error'] = f'이메일 수 계산 실패: {str(e)}'
+                    request_status[request_id]['updated_at'] = datetime.now().isoformat()
+                return
         
         # Send start notification email
-        logger.info("Sending start notification email...")
+        logger.info("시작 알림 이메일을 전송하고 있습니다...")
         send_start_notification(gmail_userid, gmail_password, start_date_str, end_date_str, email_count, request_id)
-        logger.info("Start notification sent successfully")
+        logger.info("시작 알림 이메일이 전송되었습니다")
         
         # Process emails
-        logger.info(f"Processing emails for {gmail_userid} from {start_date_str} to {end_date_str}")
-        logger.info(f"Strict mode: {'enabled' if strict_mode else 'disabled'}")
+        logger.info("이메일 처리를 시작합니다: %s ~ %s", start_date_str, end_date_str)
+        logger.info("엄격 모드: %s", '활성화' if strict_mode else '비활성화')
         pairs, error = process_emails(
-            gmail_userid, 
-            gmail_password, 
-            start_date, 
+            gmail_userid,
+            gmail_password,
+            start_date,
             end_date,
             keywords=keywords,
             student_id_length=student_id_length,
@@ -305,7 +360,7 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         )
         
         if error:
-            logger.error(f"Error processing emails: {error}")
+            logger.error(f"이메일 처리 중 오류가 발생했습니다: {error}")
             # Update request status to failed
             if request_id and request_id in request_status:
                 request_status[request_id]['status'] = 'failed'
@@ -314,7 +369,7 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
             return
         
         if not pairs:
-            logger.warning("No email pairs found")
+            logger.warning("상담 기록을 찾을 수 없습니다")
             # Update request status to completed (but with no results)
             if request_id and request_id in request_status:
                 request_status[request_id]['status'] = 'completed'
@@ -324,9 +379,10 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         
         # Create Excel file
         output_file = f"consultation_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        logger.info(f"Creating Excel report: {output_file}")
+        logger.info(f"엑셀 보고서를 생성하고 있습니다: {output_file}")
         
         # Prepare data for Excel
+        logger.info("데이터를 정리하고 있습니다...")
         data = []
         for pair in pairs:
             data.append({
@@ -344,14 +400,15 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
             })
         
         # Create DataFrame and save to Excel
+        logger.info("엑셀 파일을 저장하고 있습니다...")
         df = pd.DataFrame(data)
         df.to_excel(output_file, index=False, engine='openpyxl')
-        logger.info(f"Excel report created: {output_file}")
+        logger.info(f"엑셀 보고서가 생성되었습니다: {output_file}")
         
         # Send completion notification email with attachment
-        logger.info("Sending completion notification email...")
+        logger.info("완료 알림 이메일을 전송하고 있습니다...")
         send_completion_notification(gmail_userid, gmail_password, pairs, output_file, request_id)
-        logger.info("Completion notification sent successfully")
+        logger.info("완료 알림 이메일이 전송되었습니다")
         
         # Update request status to completed
         if request_id and request_id in request_status:
@@ -359,12 +416,14 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
             request_status[request_id]['result_count'] = len(pairs)
             request_status[request_id]['updated_at'] = datetime.now().isoformat()
         
+        logger.info(f"모든 처리가 완료되었습니다. 총 {len(pairs)}건의 상담 기록을 처리했습니다")
+        
         # Clean up Excel file after sending
         try:
             os.remove(output_file)
-            logger.info(f"Cleaned up Excel file: {output_file}")
+            logger.info(f"임시 엑셀 파일을 정리했습니다: {output_file}")
         except Exception as e:
-            logger.warning(f"Could not remove Excel file: {e}")
+            logger.warning(f"엑셀 파일 삭제 실패: {e}")
         
     except Exception as e:
         logger.exception(f"Error in background processing: {e}")
@@ -379,8 +438,14 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         if queue_handler:
             root_logger = logging.getLogger()
             main_logger = logging.getLogger('main')
-            root_logger.removeHandler(queue_handler)
-            main_logger.removeHandler(queue_handler)
+            app_logger = logging.getLogger(__name__)
+            
+            try:
+                root_logger.removeHandler(queue_handler)
+                main_logger.removeHandler(queue_handler)
+                app_logger.removeHandler(queue_handler)
+            except:
+                pass
         
         # Send end signal to stream
         if session_id and session_id in log_queues:
@@ -397,27 +462,29 @@ def index():
 def stream(session_id):
     """Stream logs to the client using Server-Sent Events."""
     
-    def generate():
-        # Create a queue for this session
-        log_queue = queue.Queue()
-        log_queues[session_id] = log_queue
+    def generate():        
+        # Send initial connection message
+        yield f"data: [연결됨] 로그 스트림이 시작되었습니다 (세션: {session_id}, {list(log_queues.keys())})\n\n"
         
         try:
             while True:
                 # Wait for log messages
                 try:
-                    msg = log_queue.get(timeout=30)
+                    log_queue = log_queues[session_id]
+                    if not log_queue:
+                        yield f"data: [오류] 로그 큐를 찾을 수 없습니다. log_queues keys: {list(log_queues.keys())}, session_id: {session_id}\n\n"
+                        break
+                    msg = log_queue.get(timeout=10)
                     if msg is None:  # Sentinel to end the stream
+                        yield f"data: [종료] 로그 스트림이 종료되었습니다\n\n"
                         break
                     yield f"data: {msg}\n\n"
                 except queue.Empty:
                     # Send a heartbeat to keep connection alive
                     yield ": heartbeat\n\n"
         finally:
-            # Clean up the queue when done
-            if session_id in log_queues:
-                del log_queues[session_id]
-    
+          pass
+
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 
@@ -470,8 +537,14 @@ def process():
 
         # Set up logging to queue if session_id is provided
         queue_handler = None
-        if session_id and session_id in log_queues:
-            log_queue = log_queues[session_id]
+        if session_id:
+            # Ensure queue exists for this session
+            if session_id not in log_queues:
+                log_queue = queue.Queue()
+                log_queues[session_id] = log_queue
+            else:
+                log_queue = log_queues[session_id]
+            
             queue_handler = QueueHandler(log_queue)
             queue_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
             
@@ -484,9 +557,8 @@ def process():
         # Parse strict mode (default: True)
         strict_mode = strict_mode_str in ('true', '1', 'on', 'yes')
 
-        # First, do a quick check to get email count for notification
-        # We'll do a lightweight connection test and count
-        logger.info("Performing initial email count estimation...")
+        # Quick Gmail authentication check only (for fast validation)
+        logger.info("Gmail 인증을 확인하고 있습니다...")
         
         try:
             from main import GmailIMAPClient
@@ -509,37 +581,45 @@ def process():
                     }), 401
                 return jsonify({'error': '연결에 실패했습니다'}), 400
             
-            # Get rough email count for estimate
-            emails = client.fetch_emails(start_date, end_date)
-            email_count = len(emails)
+            # Close connection immediately after authentication
             client.close()
-            
-            logger.info(f"Estimated {email_count} emails to process")
+            logger.info("Gmail 인증이 성공했습니다")
             
         except Exception as e:
-            logger.exception(f"Error during initial check: {e}")
-            return jsonify({'error': f'초기 연결 중 오류가 발생했습니다: {str(e)}'}), 500
+            logger.exception(f"인증 확인 중 오류: {e}")
+            return jsonify({'error': f'인증 확인 중 오류가 발생했습니다: {str(e)}'}), 500
+        
+        finally:
+            # Remove queue handler if it was added
+            if queue_handler:
+                root_logger = logging.getLogger()
+                main_logger = logging.getLogger('main')
+                try:
+                    root_logger.removeHandler(queue_handler)
+                    main_logger.removeHandler(queue_handler)
+                except:
+                    pass
         
         # Generate request ID
         request_id = str(uuid.uuid4())
         
-        # Store initial request status
+        # Store initial request status (email_count will be updated in background)
         request_status[request_id] = {
             'status': 'pending',
             'session_id': session_id,
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat(),
-            'email_count': email_count,
+            'email_count': 0,  # Will be updated in background
             'result_count': 0,
             'error': None
         }
         
-        # Start background processing
+        # Start background processing (email_count = 0 to trigger calculation in background)
         thread = threading.Thread(
             target=process_emails_background,
             args=(gmail_userid, gmail_password, start_date, end_date, 
                   start_date_str, end_date_str, keywords, student_id_length, 
-                  email_count, strict_mode, session_id, request_id),
+                  0, strict_mode, session_id, request_id),  # email_count = 0
             daemon=True
         )
         thread.start()
@@ -548,8 +628,7 @@ def process():
         # Return immediate response with request ID
         return jsonify({
             'success': True,
-            'message': f'처리가 시작되었습니다. 총 {email_count}개의 이메일을 처리합니다.',
-            'email_count': email_count,
+            'message': '처리가 시작되었습니다. 이메일 수 계산 중입니다.',
             'background': True,
             'request_id': request_id
         })
