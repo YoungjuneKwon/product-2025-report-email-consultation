@@ -15,7 +15,7 @@ import os
 import sys
 import re
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Tuple, Optional
 import pandas as pd
 
@@ -38,16 +38,22 @@ class EmailPair:
     def get_date(self) -> str:
         """Get response email date in YYYY-MM-DD format."""
         date = parsedate_to_datetime(self.response['Date'])
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
         return date.strftime('%Y-%m-%d')
     
     def get_start_time(self) -> str:
         """Get response email time in HH:MM format."""
         date = parsedate_to_datetime(self.response['Date'])
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
         return date.strftime('%H:%M')
     
     def get_end_time(self) -> str:
         """Get response email time + 30 minutes in HH:MM format."""
         date = parsedate_to_datetime(self.response['Date'])
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
         end_time = date + timedelta(minutes=30)
         return end_time.strftime('%H:%M')
     
@@ -133,6 +139,12 @@ class GmailPOP3Client:
             logger.error("Not connected to server")
             return []
         
+        # Ensure start_date and end_date have timezone info
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+        
         try:
             # Get number of messages
             num_messages = len(self.connection.list()[1])
@@ -153,6 +165,10 @@ class GmailPOP3Client:
                     # Check date
                     if 'Date' in msg:
                         msg_date = parsedate_to_datetime(msg['Date'])
+                        
+                        # Ensure msg_date has timezone info
+                        if msg_date.tzinfo is None:
+                            msg_date = msg_date.replace(tzinfo=timezone.utc)
                         
                         # Filter by date range
                         if start_date <= msg_date <= end_date:
@@ -296,8 +312,12 @@ def process_emails(gmail_userid: str, gmail_password: str, start_date: datetime,
     if keywords is None:
         keywords = ["교수님", "안녕하세요", "입니다"]
     
-    # Make end_date inclusive (end of day)
+    # Make end_date inclusive (end of day) and ensure timezone info
     end_date = end_date.replace(hour=23, minute=59, second=59)
+    if start_date.tzinfo is None:
+        start_date = start_date.replace(tzinfo=timezone.utc)
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=timezone.utc)
     
     logger.info(f"Fetching emails from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
