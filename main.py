@@ -66,6 +66,69 @@ class EmailPair:
         """Extract plain text from response email body."""
         return self._get_email_body(self.response)
     
+    def get_student_id(self) -> str:
+        """Extract student ID from request email body."""
+        request_text = self.get_request_text()
+        
+        # Look for 8-digit student ID pattern
+        # Common patterns: "학번 12345678", "12345678 학번", "저는 12345678입니다"
+        pattern = re.compile(r'\d{8}')
+        match = pattern.search(request_text)
+        
+        if match:
+            return match.group()
+        return ""
+    
+    def get_student_name(self) -> str:
+        """Extract student name from request email body."""
+        request_text = self.get_request_text()
+        
+        # Look for Korean name patterns
+        # Common patterns: "저는 김철수입니다", "학번 12345678 김철수"
+        # Korean names are typically 2-4 characters
+        
+        # Pattern 1: "저는 <name>입니다" or "저는 <name>이라고 합니다"
+        # But NOT "저는 학번 ..." which is not a name
+        pattern1 = re.compile(r'저는\s*([가-힣]{2,4})(?:입니다|이라고|라고|입니|이에요)')
+        match = pattern1.search(request_text)
+        if match:
+            name = match.group(1)
+            # Filter out common words that are not names
+            if name not in ['학번', '이름', '학생', '교수님']:
+                return name
+        
+        # Pattern 2: "학번 <student_id> <name>" followed by common verb endings
+        # This pattern looks for names that come after student ID
+        # E.g., "학번 12345678 김철수입니다"
+        pattern2 = re.compile(r'\d{8}\s+학번\s+([가-힣]{2,4})(?:입니다|이라고|라고|입니|이에요)')
+        match = pattern2.search(request_text)
+        if match:
+            name = match.group(1)
+            if name and name not in ['학번', '이름', '학생', '문의사항', '과제', '질문']:
+                return name
+        
+        # Pattern 3: "<student_id> 학번 <name>"
+        # E.g., "20251234 학번 박지훈입니다"
+        pattern3 = re.compile(r'학번\s+\d{8}\s+([가-힣]{2,4})(?:입니다|이라고|라고|입니|이에요)')
+        match = pattern3.search(request_text)
+        if match:
+            name = match.group(1)
+            if name and name not in ['학번', '이름', '학생', '문의사항', '과제', '질문']:
+                return name
+        
+        return ""
+    def get_request_from(self) -> str:
+        """Get sender email address from request email."""
+        return self.request.get('From', '')
+    
+    def get_request_to(self) -> str:
+        """Get recipient email address from request email."""
+        return self.request.get('To', '')
+    
+    def get_request_subject(self) -> str:
+        """Get subject from request email."""
+        return self.request.get('Subject', '')
+    
     def _get_email_body(self, msg: email.message.EmailMessage) -> str:
         """Extract plain text body from email message."""
         body = ""
@@ -788,6 +851,9 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
         logger.info(f"  Date: {pair.get_date()}")
         logger.info(f"  Start Time: {pair.get_start_time()}")
         logger.info(f"  End Time: {pair.get_end_time()}")
+        logger.info(f"  From: {pair.get_request_from()}")
+        logger.info(f"  To: {pair.get_request_to()}")
+        logger.info(f"  Subject: {pair.get_request_subject()}")
         logger.info(f"  Request length: {len(pair.get_request_text())} characters")
         logger.info(f"  Response length: {len(pair.get_response_text())} characters")
         
@@ -796,6 +862,11 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
             '시작시간': pair.get_start_time(),
             '종료시간': pair.get_end_time(),
             '장소': '연구실',
+            '학생': pair.get_student_name(),
+            '학번': pair.get_student_id(),
+            '발신자 이메일 주소': pair.get_request_from(),
+            '수신자 이메일 주소': pair.get_request_to(),
+            '메일의 제목': pair.get_request_subject(),
             '상담요청 내용': pair.get_request_text(),
             '교수 답변': pair.get_response_text()
         })
@@ -803,6 +874,13 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
     # Create DataFrame
     logger.info(f"\nCreating DataFrame with {len(data)} rows...")
     df = pd.DataFrame(data)
+    
+    # Ensure student ID is treated as string (not numeric)
+    # Replace empty strings with actual empty strings for display
+    if '학번' in df.columns:
+        df['학번'] = df['학번'].fillna('')
+    if '학생' in df.columns:
+        df['학생'] = df['학생'].fillna('')
     
     # Export to Excel
     logger.info(f"Exporting to Excel file: {output_file}")

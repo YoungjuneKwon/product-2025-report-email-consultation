@@ -39,6 +39,8 @@ ENV/
 
 # Test files
 test_strict_mode.py
+# Screenshots and temporary demo files
+screenshots/
 
 # Environment variables
 .env
