@@ -91,6 +91,21 @@ def process():
         
         if error:
             logger.error(f"Error processing emails: {error}")
+            
+            # Check if it's an authentication error
+            if error == "AUTH_FAILED":
+                return jsonify({
+                    'error': error,
+                    'errorType': 'AUTH_FAILED',
+                    'message': 'Gmail 인증에 실패했습니다. 앱 비밀번호를 확인해주세요.'
+                }), 401
+            elif error == "CONNECTION_FAILED":
+                return jsonify({
+                    'error': error,
+                    'errorType': 'AUTH_FAILED',  # Treat as auth error for user guidance
+                    'message': 'Gmail 연결에 실패했습니다. 인증 정보를 확인해주세요.'
+                }), 401
+            
             return jsonify({'error': error}), 400
         
         # Convert pairs to table data

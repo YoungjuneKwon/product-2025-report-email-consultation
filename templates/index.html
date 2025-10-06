@@ -136,6 +136,41 @@
             color: #c33;
             border: 1px solid #fcc;
         }
+        
+        .alert-auth-help {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            padding: 20px;
+        }
+        
+        .alert-auth-help h3 {
+            margin-bottom: 15px;
+            color: #856404;
+        }
+        
+        .alert-auth-help ol {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .alert-auth-help li {
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        
+        .alert-auth-help a {
+            color: #0066cc;
+            text-decoration: underline;
+        }
+        
+        .alert-auth-help .link-box {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 15px;
+            word-break: break-all;
+        }
 
         .alert-success {
             background: #efe;
@@ -368,7 +403,12 @@
                     displayResults(data.data);
                     tableData = data.data;
                 } else {
-                    showError(data.error || '처리 중 오류가 발생했습니다');
+                    // Check if it's an authentication error
+                    if (data.errorType === 'AUTH_FAILED') {
+                        showAuthHelp();
+                    } else {
+                        showError(data.error || '처리 중 오류가 발생했습니다');
+                    }
                 }
             } catch (error) {
                 showError('서버와 통신 중 오류가 발생했습니다: ' + error.message);
@@ -382,6 +422,45 @@
             const alert = document.getElementById('alert');
             alert.className = 'alert alert-error';
             alert.textContent = '❌ ' + message;
+            alert.style.display = 'block';
+            alert.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function showAuthHelp() {
+            const alert = document.getElementById('alert');
+            alert.className = 'alert alert-auth-help';
+            alert.innerHTML = `
+                <h3>🔐 Gmail 앱 비밀번호 설정이 필요합니다</h3>
+                <p><strong>Gmail 인증에 실패했습니다.</strong> Google 계정의 2단계 인증과 앱 비밀번호를 설정해야 합니다.</p>
+                
+                <h4 style="margin-top: 15px; margin-bottom: 10px;">📝 앱 비밀번호 생성 절차:</h4>
+                <ol>
+                    <li><strong>Google 계정 보안 페이지</strong>로 이동합니다:
+                        <div class="link-box">
+                            <a href="https://myaccount.google.com/security" target="_blank">https://myaccount.google.com/security</a>
+                        </div>
+                    </li>
+                    <li><strong>2단계 인증</strong>을 활성화합니다 (아직 활성화하지 않은 경우)</li>
+                    <li><strong>앱 비밀번호</strong> 메뉴를 찾아 클릭합니다
+                        <div class="link-box" style="margin-top: 5px;">
+                            직접 링크: <a href="https://myaccount.google.com/apppasswords" target="_blank">https://myaccount.google.com/apppasswords</a>
+                        </div>
+                    </li>
+                    <li>앱 이름을 입력합니다 (예: "상담보고서")</li>
+                    <li><strong>생성</strong> 버튼을 클릭합니다</li>
+                    <li>생성된 <strong>16자리 앱 비밀번호</strong>를 복사합니다</li>
+                    <li>위의 "Gmail 앱 비밀번호" 필드에 복사한 비밀번호를 입력합니다</li>
+                </ol>
+                
+                <h4 style="margin-top: 15px; margin-bottom: 10px;">⚙️ POP 설정 확인:</h4>
+                <ol>
+                    <li>Gmail 설정으로 이동: <a href="https://mail.google.com/mail/u/0/#settings/fwdandpop" target="_blank">전달 및 POP/IMAP</a></li>
+                    <li><strong>"모든 메일에 POP 사용"</strong> 또는 <strong>"지금부터 수신되는 메일에 대해 POP 사용"</strong>을 선택합니다</li>
+                    <li>변경사항을 저장합니다</li>
+                </ol>
+                
+                <p style="margin-top: 15px;"><strong>💡 참고:</strong> 일반 Gmail 비밀번호가 아닌 <strong>앱 비밀번호</strong>를 사용해야 합니다.</p>
+            `;
             alert.style.display = 'block';
             alert.scrollIntoView({ behavior: 'smooth' });
         }
