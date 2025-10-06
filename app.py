@@ -232,6 +232,8 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
                               start_date: datetime, end_date: datetime,
                               start_date_str: str, end_date_str: str,
                               keywords: List[str], student_id_length: int,
+                              email_count: int,
+                              strict_mode: bool = True,
                               session_id: str = None):
     """
     Process emails in background thread and send notification emails.
@@ -245,6 +247,8 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         end_date_str: End date string for display
         keywords: Keywords to filter
         student_id_length: Student ID length
+        email_count: Number of emails to process (for notification)
+        strict_mode: Whether to use strict student ID filtering
         session_id: Optional session ID for logging
     """
     queue_handler = None
@@ -262,15 +266,22 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
             root_logger.addHandler(queue_handler)
             main_logger.addHandler(queue_handler)
         
+        # Send start notification email
+        logger.info("Sending start notification email...")
+        send_start_notification(gmail_userid, gmail_password, start_date_str, end_date_str, email_count)
+        logger.info("Start notification sent successfully")
+        
         # Process emails
         logger.info(f"Processing emails for {gmail_userid} from {start_date_str} to {end_date_str}")
+        logger.info(f"Strict mode: {'enabled' if strict_mode else 'disabled'}")
         pairs, error = process_emails(
             gmail_userid, 
             gmail_password, 
             start_date, 
             end_date,
             keywords=keywords,
-            student_id_length=student_id_length
+            student_id_length=student_id_length,
+            strict_mode=strict_mode
         )
         
         if error:
@@ -440,11 +451,6 @@ def process():
             from main import GmailIMAPClient
             client = GmailIMAPClient(gmail_userid, gmail_password)
             connect_result = client.connect()
-
-            # Process emails
-            logger.info(f"Processing emails for {gmail_userid} from {start_date_str} to {end_date_str}")
-            logger.info(f"Strict mode: {'enabled' if strict_mode else 'disabled'}")
- 
             
             if connect_result is not True:
                 # Authentication failed
@@ -469,20 +475,6 @@ def process():
             
             logger.info(f"Estimated {email_count} emails to process")
             
-            # Send start notification email
-            logger.info("Sending start notification email...")
-            send_start_notification(gmail_userid, gmail_password, start_date_str, end_date_str, email_count)
-            
-            logger.info("Start notification sent successfully")
-            pairs, error = process_emails(
-                gmail_userid, 
-                gmail_password, 
-                start_date, 
-                end_date,
-                keywords=keywords,
-                student_id_length=student_id_length,
-                strict_mode=strict_mode
-            )           
         except Exception as e:
             logger.exception(f"Error during initial check: {e}")
             return jsonify({'error': f'초기 연결 중 오류가 발생했습니다: {str(e)}'}), 500
@@ -491,7 +483,8 @@ def process():
         thread = threading.Thread(
             target=process_emails_background,
             args=(gmail_userid, gmail_password, start_date, end_date, 
-                  start_date_str, end_date_str, keywords, student_id_length, session_id),
+                  start_date_str, end_date_str, keywords, student_id_length, 
+                  email_count, strict_mode, session_id),
             daemon=True
         )
         thread.start()
