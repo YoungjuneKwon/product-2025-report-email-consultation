@@ -111,6 +111,7 @@ def process():
         # Optional parameters
         student_id_length_str = request.form.get('student_id_length', '8').strip()
         keywords_str = request.form.get('keywords', '').strip()
+        strict_mode_str = request.form.get('strict_mode', 'true').strip().lower()
         
         # Validate required fields
         if not gmail_userid:
@@ -143,6 +144,9 @@ def process():
         if keywords_str:
             keywords = [kw.strip() for kw in keywords_str.split(',') if kw.strip()]
         
+        # Parse strict mode (default: True)
+        strict_mode = strict_mode_str in ('true', '1', 'on', 'yes')
+        
         # Set up logging to queue if session_id is provided
         queue_handler = None
         if session_id and session_id in log_queues:
@@ -159,13 +163,15 @@ def process():
         try:
             # Process emails
             logger.info(f"Processing emails for {gmail_userid} from {start_date_str} to {end_date_str}")
+            logger.info(f"Strict mode: {'enabled' if strict_mode else 'disabled'}")
             pairs, error = process_emails(
                 gmail_userid, 
                 gmail_password, 
                 start_date, 
                 end_date,
                 keywords=keywords,
-                student_id_length=student_id_length
+                student_id_length=student_id_length,
+                strict_mode=strict_mode
             )
             
             if error:

@@ -37,6 +37,9 @@ ENV/
 *.xlsx
 *.xls
 
+# Test files
+test_strict_mode.py
+
 # Environment variables
 .env
 
