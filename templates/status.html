@@ -796,13 +796,6 @@
                 showError('파일 다운로드 중 오류가 발생했습니다: ' + error.message);
             }
         }
-            alert.className = 'alert alert-success';
-            alert.textContent = '✅ ' + message;
-            alert.style.display = 'block';
-            setTimeout(() => {
-                alert.style.display = 'none';
-            }, 3000);
-        }
 
         // Load request list on page load
         window.addEventListener('DOMContentLoaded', function() {
