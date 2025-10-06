@@ -447,6 +447,14 @@
                     <h3>선택 옵션</h3>
                     
                     <div class="form-group">
+                        <div class="checkbox-container">
+                            <input type="checkbox" id="strict_mode" name="strict_mode" value="true" checked>
+                            <label for="strict_mode">Strict 모드 (학번 필터링 강화)</label>
+                        </div>
+                        <div class="help-text">활성화 시 제목 또는 본문에 학번이 있는 이메일만 처리합니다 (기본: 활성화)</div>
+                    </div>
+                    
+                    <div class="form-group">
                         <label>학번 길이</label>
                         <input type="number" id="student_id_length" name="student_id_length" value="8" min="0">
                         <div class="help-text">학번 자릿수 (0 = 학번 필터링 안함)</div>

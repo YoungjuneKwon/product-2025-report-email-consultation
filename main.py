@@ -15,6 +15,7 @@ import os
 import sys
 import re
 import logging
+import argparse
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Tuple, Optional
 import pandas as pd
@@ -891,7 +892,7 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
 
 
 def process_emails(gmail_userid: str, gmail_password: str, start_date: datetime, end_date: datetime,
-                   keywords: List[str] = None, student_id_length: int = 8) -> Tuple[List[EmailPair], str]:
+                   keywords: List[str] = None, student_id_length: int = 8, strict_mode: bool = True) -> Tuple[List[EmailPair], str]:
     """
     Process emails and return pairs and any error message.
     
@@ -902,6 +903,7 @@ def process_emails(gmail_userid: str, gmail_password: str, start_date: datetime,
         end_date: End date for email search
         keywords: Optional list of keywords to filter by (default: ["교수님", "안녕하세요", "입니다"])
         student_id_length: Length of student ID to filter by (default: 8)
+        strict_mode: When True, only process emails with student ID in subject or body (default: True)
     
     Returns:
         Tuple of (list of EmailPair objects, error message or empty string)
@@ -953,10 +955,18 @@ def process_emails(gmail_userid: str, gmail_password: str, start_date: datetime,
             filtered = []
             for pair in pairs:
                 request_text = pair.get_request_text()
-                if pattern.search(request_text):
-                    filtered.append(pair)
+                request_subject = pair.request.get('Subject', '')
+                
+                # In strict mode, check both subject and body
+                if strict_mode:
+                    if pattern.search(request_subject) or pattern.search(request_text):
+                        filtered.append(pair)
+                else:
+                    # Non-strict mode: only check body (legacy behavior)
+                    if pattern.search(request_text):
+                        filtered.append(pair)
             pairs = filtered
-            logger.info(f"After student ID filtering: {len(pairs)} pairs")
+            logger.info(f"After student ID filtering (strict_mode={strict_mode}): {len(pairs)} pairs")
         
         if not pairs:
             return [], "No emails containing student ID"
@@ -973,6 +983,29 @@ def process_emails(gmail_userid: str, gmail_password: str, start_date: datetime,
 
 def main():
     """Main function."""
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description='Gmail IMAP Email Consultation Report Generator',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Process emails from the last 30 days with strict mode (default)
+  python main.py
+  
+  # Process emails for a specific date range with strict mode
+  python main.py 2025-01-01 2025-01-31
+  
+  # Process emails without strict mode (legacy behavior)
+  python main.py 2025-01-01 2025-01-31 --no-strict
+        """
+    )
+    parser.add_argument('start_date', nargs='?', help='Start date (YYYY-MM-DD format)')
+    parser.add_argument('end_date', nargs='?', help='End date (YYYY-MM-DD format)')
+    parser.add_argument('--no-strict', action='store_true', 
+                       help='Disable strict mode (only check student ID in body, not subject)')
+    
+    args = parser.parse_args()
+    
     # Get credentials from environment variables
     gmail_userid = os.getenv('GMAIL_USERID')
     gmail_password = os.getenv('GMAIL_PASSWORD')
@@ -982,13 +1015,13 @@ def main():
         sys.exit(1)
     
     # Get date range from command line arguments or use defaults
-    if len(sys.argv) >= 3:
+    if args.start_date and args.end_date:
         try:
-            start_date = datetime.strptime(sys.argv[1], '%Y-%m-%d')
-            end_date = datetime.strptime(sys.argv[2], '%Y-%m-%d')
+            start_date = datetime.strptime(args.start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(args.end_date, '%Y-%m-%d')
         except ValueError:
             logger.error("Date format should be YYYY-MM-DD")
-            logger.error("Usage: python main.py <start_date> <end_date>")
+            logger.error("Usage: python main.py <start_date> <end_date> [--no-strict]")
             sys.exit(1)
     else:
         # Default: last 30 days
@@ -996,8 +1029,13 @@ def main():
         start_date = end_date - timedelta(days=30)
         logger.info(f"No date range specified, using last 30 days")
     
+    # Determine strict mode (default is True)
+    strict_mode = not args.no_strict
+    logger.info(f"Strict mode: {'enabled' if strict_mode else 'disabled'}")
+    
     # Process emails
-    pairs, error = process_emails(gmail_userid, gmail_password, start_date, end_date)
+    pairs, error = process_emails(gmail_userid, gmail_password, start_date, end_date, 
+                                  strict_mode=strict_mode)
     
     if error:
         logger.error(error)
