@@ -47,3 +47,6 @@ screenshots/
 instance/
 .webassets-cache
 .flask_session/
+
+# Screenshots
+screenshots/

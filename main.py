@@ -116,6 +116,17 @@ class EmailPair:
                 return name
         
         return ""
+    def get_request_from(self) -> str:
+        """Get sender email address from request email."""
+        return self.request.get('From', '')
+    
+    def get_request_to(self) -> str:
+        """Get recipient email address from request email."""
+        return self.request.get('To', '')
+    
+    def get_request_subject(self) -> str:
+        """Get subject from request email."""
+        return self.request.get('Subject', '')
     
     def _get_email_body(self, msg: email.message.EmailMessage) -> str:
         """Extract plain text body from email message."""
@@ -362,11 +373,15 @@ class GmailIMAPClient:
         emails = []
         num_messages = len(msg_ids)
         
+        # Log initial progress information
+        logger.info(f"PROGRESS|TOTAL|{num_messages}")
+        
         # Fetch messages
         for idx, msg_id in enumerate(msg_ids, 1):
             try:
                 logger.info("=" * 40)
                 logger.info(f"Processing {folder_name} message {idx}/{num_messages}")
+                logger.info(f"PROGRESS|CURRENT|{idx}|{num_messages}")
                 
                 # First fetch headers only for quick date check
                 logger.info(f"Fetching headers for message {idx}...")
@@ -588,9 +603,13 @@ class EmailFilter:
                     logger.info(f"    Original From: {original_from}")
                     logger.info(f"    Original Subject: {original_subject}")
                     
-                    pair = EmailPair(original, sent_msg)
-                    pairs.append(pair)
-                    logger.info(f"  ✓ PAIR CREATED (Total pairs: {len(pairs)})")
+                    # Check if original sender is the configured user (GMAIL_USERID)
+                    if self.userid in original_from:
+                        logger.info(f"  ✗ EXCLUDED - Original sender is GMAIL_USERID ({self.userid})")
+                    else:
+                        pair = EmailPair(original, sent_msg)
+                        pairs.append(pair)
+                        logger.info(f"  ✓ PAIR CREATED (Total pairs: {len(pairs)})")
                 else:
                     logger.info(f"  ✗ Original email not found (tried both Message-ID and subject matching)")
             else:
@@ -658,16 +677,22 @@ class EmailFilter:
                 
                 if original:
                     original_to = original.get('To', 'Unknown')
+                    original_from = original.get('From', 'Unknown')
                     original_subject = original.get('Subject', 'No Subject')
                     
                     logger.info(f"  ✓ Found original email via {match_method}:")
+                    logger.info(f"    Original From: {original_from}")
                     logger.info(f"    Original To: {original_to}")
                     logger.info(f"    Original Subject: {original_subject}")
                     
-                    # In this case, the "request" is the sent email and "response" is the inbox email
-                    pair = EmailPair(original, inbox_msg)
-                    pairs.append(pair)
-                    logger.info(f"  ✓ PAIR CREATED (Total pairs: {len(pairs)})")
+                    # Check if original sender is the configured user (GMAIL_USERID)
+                    if self.userid in original_from:
+                        logger.info(f"  ✗ EXCLUDED - Original sender is GMAIL_USERID ({self.userid})")
+                    else:
+                        # In this case, the "request" is the sent email and "response" is the inbox email
+                        pair = EmailPair(original, inbox_msg)
+                        pairs.append(pair)
+                        logger.info(f"  ✓ PAIR CREATED (Total pairs: {len(pairs)})")
                 else:
                     logger.info(f"  ✗ Original email not found (tried both Message-ID and subject matching)")
             else:
@@ -825,6 +850,9 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
         logger.info(f"  Date: {pair.get_date()}")
         logger.info(f"  Start Time: {pair.get_start_time()}")
         logger.info(f"  End Time: {pair.get_end_time()}")
+        logger.info(f"  From: {pair.get_request_from()}")
+        logger.info(f"  To: {pair.get_request_to()}")
+        logger.info(f"  Subject: {pair.get_request_subject()}")
         logger.info(f"  Request length: {len(pair.get_request_text())} characters")
         logger.info(f"  Response length: {len(pair.get_response_text())} characters")
         
@@ -835,6 +863,9 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
             '장소': '연구실',
             '학생': pair.get_student_name(),
             '학번': pair.get_student_id(),
+            '발신자 이메일 주소': pair.get_request_from(),
+            '수신자 이메일 주소': pair.get_request_to(),
+            '메일의 제목': pair.get_request_subject(),
             '상담요청 내용': pair.get_request_text(),
             '교수 답변': pair.get_response_text()
         })

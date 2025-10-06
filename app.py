@@ -46,7 +46,19 @@ class QueueHandler(logging.Handler):
     def emit(self, record):
         try:
             msg = self.format(record)
-            self.log_queue.put(msg)
+            # Check if this is a progress message and format accordingly
+            if 'PROGRESS|' in msg:
+                # Extract progress information
+                parts = msg.split('PROGRESS|')
+                if len(parts) > 1:
+                    progress_data = parts[1].strip()
+                    # Send both the formatted log and the progress data separately
+                    self.log_queue.put(msg)
+                    self.log_queue.put(f"__PROGRESS__{progress_data}")
+                else:
+                    self.log_queue.put(msg)
+            else:
+                self.log_queue.put(msg)
         except Exception:
             self.handleError(record)
 
@@ -189,6 +201,9 @@ def process():
                     '장소': '연구실',
                     '학생': pair.get_student_name(),
                     '학번': pair.get_student_id(),
+                    '발신자 이메일 주소': pair.get_request_from(),
+                    '수신자 이메일 주소': pair.get_request_to(),
+                    '메일의 제목': pair.get_request_subject(),
                     '상담요청 내용': pair.get_request_text(),
                     '교수 답변': pair.get_response_text()
                 })
