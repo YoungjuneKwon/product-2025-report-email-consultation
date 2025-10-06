@@ -257,6 +257,25 @@
             margin-top: 5px;
         }
 
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .checkbox-container label {
+            margin: 0;
+            font-weight: normal;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
         @media (max-width: 768px) {
             .date-range {
                 grid-template-columns: 1fr;
@@ -293,6 +312,10 @@
                     <label class="required">Gmail 앱 비밀번호</label>
                     <input type="password" id="gmail_password" name="gmail_password" required>
                     <div class="help-text">Gmail 앱 비밀번호를 입력하세요 (2단계 인증 필요)</div>
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="show_password" onchange="togglePassword()">
+                        <label for="show_password">비밀번호 보기</label>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -366,6 +389,18 @@
 
     <script>
         let tableData = [];
+
+        // Toggle password visibility
+        function togglePassword() {
+            const passwordField = document.getElementById('gmail_password');
+            const showPasswordCheckbox = document.getElementById('show_password');
+            
+            if (showPasswordCheckbox.checked) {
+                passwordField.type = 'text';
+            } else {
+                passwordField.type = 'password';
+            }
+        }
 
         // Set default dates (last 30 days)
         window.addEventListener('DOMContentLoaded', function() {
