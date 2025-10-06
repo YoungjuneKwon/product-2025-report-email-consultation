@@ -447,6 +447,14 @@
                     <h3>선택 옵션</h3>
                     
                     <div class="form-group">
+                        <div class="checkbox-container">
+                            <input type="checkbox" id="strict_mode" name="strict_mode" value="true" checked>
+                            <label for="strict_mode">Strict 모드 (학번 필터링 강화)</label>
+                        </div>
+                        <div class="help-text">활성화 시 제목 또는 본문에 학번이 있는 이메일만 처리합니다 (기본: 활성화)</div>
+                    </div>
+                    
+                    <div class="form-group">
                         <label>학번 길이</label>
                         <input type="number" id="student_id_length" name="student_id_length" value="8" min="0">
                         <div class="help-text">학번 자릿수 (0 = 학번 필터링 안함)</div>
@@ -651,6 +659,19 @@
                     body: formData
                 });
                 
+                // Close the event source
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+                
+                // Check if response is JSON before parsing
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    // Server returned non-JSON response (likely HTML error page)
+                    throw new Error('서버에서 예상치 못한 응답을 받았습니다. 서버 오류가 발생했을 수 있습니다.');
+                }
+                
                 const data = await response.json();
                 
                 if (response.ok) {
@@ -791,8 +812,15 @@
                     document.body.removeChild(a);
                     showSuccess('엑셀 파일이 다운로드되었습니다');
                 } else {
-                    const data = await response.json();
-                    showError(data.error || '다운로드 중 오류가 발생했습니다');
+                    // Check if response is JSON before parsing
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const data = await response.json();
+                        showError(data.error || '다운로드 중 오류가 발생했습니다');
+                    } else {
+                        // Server returned non-JSON response (likely HTML error page)
+                        showError('다운로드 중 서버 오류가 발생했습니다');
+                    }
                 }
             } catch (error) {
                 showError('다운로드 중 오류가 발생했습니다: ' + error.message);

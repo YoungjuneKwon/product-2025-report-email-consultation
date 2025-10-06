@@ -383,6 +383,7 @@ def process():
         # Optional parameters
         student_id_length_str = request.form.get('student_id_length', '8').strip()
         keywords_str = request.form.get('keywords', '').strip()
+        strict_mode_str = request.form.get('strict_mode', 'true').strip().lower()
         
         # Validate required fields
         if not gmail_userid:
@@ -414,7 +415,23 @@ def process():
         keywords = None
         if keywords_str:
             keywords = [kw.strip() for kw in keywords_str.split(',') if kw.strip()]
-        
+
+        # Set up logging to queue if session_id is provided
+        queue_handler = None
+        if session_id and session_id in log_queues:
+            log_queue = log_queues[session_id]
+            queue_handler = QueueHandler(log_queue)
+            queue_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+            
+            # Add handler to root logger and main module logger
+            root_logger = logging.getLogger()
+            main_logger = logging.getLogger('main')
+            root_logger.addHandler(queue_handler)
+            main_logger.addHandler(queue_handler)
+
+        # Parse strict mode (default: True)
+        strict_mode = strict_mode_str in ('true', '1', 'on', 'yes')
+
         # First, do a quick check to get email count for notification
         # We'll do a lightweight connection test and count
         logger.info("Performing initial email count estimation...")
@@ -423,6 +440,11 @@ def process():
             from main import GmailIMAPClient
             client = GmailIMAPClient(gmail_userid, gmail_password)
             connect_result = client.connect()
+
+            # Process emails
+            logger.info(f"Processing emails for {gmail_userid} from {start_date_str} to {end_date_str}")
+            logger.info(f"Strict mode: {'enabled' if strict_mode else 'disabled'}")
+ 
             
             if connect_result is not True:
                 # Authentication failed
@@ -450,8 +472,17 @@ def process():
             # Send start notification email
             logger.info("Sending start notification email...")
             send_start_notification(gmail_userid, gmail_password, start_date_str, end_date_str, email_count)
-            logger.info("Start notification sent successfully")
             
+            logger.info("Start notification sent successfully")
+            pairs, error = process_emails(
+                gmail_userid, 
+                gmail_password, 
+                start_date, 
+                end_date,
+                keywords=keywords,
+                student_id_length=student_id_length,
+                strict_mode=strict_mode
+            )           
         except Exception as e:
             logger.exception(f"Error during initial check: {e}")
             return jsonify({'error': f'초기 연결 중 오류가 발생했습니다: {str(e)}'}), 500
