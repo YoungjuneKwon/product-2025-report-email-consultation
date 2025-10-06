@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>요청 진행상황 조회</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .nav {
+            margin-top: 15px;
+        }
+
+        .nav a {
+            color: #667eea;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+
+        .nav a:hover {
+            text-decoration: underline;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .request-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .request-input input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .request-input input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .request-list {
+            list-style: none;
+        }
+
+        .request-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: box-shadow 0.2s;
+            cursor: pointer;
+        }
+
+        .request-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .request-item.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .request-info {
+            flex: 1;
+        }
+
+        .request-id {
+            font-family: monospace;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .request-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-right: 10px;
+        }
+
+        .status-pending {
+            background: #f39c12;
+            color: white;
+        }
+
+        .status-processing {
+            background: #3498db;
+            color: white;
+        }
+
+        .status-completed {
+            background: #2ecc71;
+            color: white;
+        }
+
+        .status-failed {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .request-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+        }
+
+        .progress-logs {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .log-line {
+            margin-bottom: 5px;
+            line-height: 1.5;
+        }
+
+        .log-error {
+            color: #f48771;
+        }
+
+        .log-warning {
+            color: #dcdcaa;
+        }
+
+        .log-info {
+            color: #d4d4d4;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar-container {
+            margin: 20px 0;
+        }
+
+        .progress-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+        }
+
+        .progress-stat-item {
+            text-align: center;
+        }
+
+        .progress-stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .progress-stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .progress-bar-wrapper {
+            position: relative;
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 30px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .progress-percentage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 요청 진행상황 조회</h1>
+            <p class="subtitle">처리 요청의 실시간 진행상황을 확인할 수 있습니다</p>
+            <div class="nav">
+                <a href="/">← 메인 페이지로 돌아가기</a>
+            </div>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="card">
+            <h2>요청 ID 추가</h2>
+            <div class="request-input">
+                <input type="text" id="requestIdInput" placeholder="요청 ID를 입력하세요 (예: 550e8400-e29b-41d4-a716-446655440000)">
+                <button class="btn btn-small" onclick="addRequestId()">추가</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>요청 목록</h2>
+            <ul id="requestList" class="request-list">
+                <li class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <div>저장된 요청 ID가 없습니다</div>
+                </li>
+            </ul>
+        </div>
+
+        <div class="card progress-container" id="progressContainer" style="display: none;">
+            <h2>실시간 진행상황</h2>
+            <div id="currentRequestInfo"></div>
+            
+            <div class="progress-bar-container" id="progressBarContainer" style="display: none;">
+                <div class="progress-stats">
+                    <div class="progress-stat-item">
+                        <div class="progress-stat-label">전체 메일 수</div>
+                        <div class="progress-stat-value" id="totalEmails">0</div>
+                    </div>
+                    <div class="progress-stat-item">
+                        <div class="progress-stat-label">처리중인 메일</div>
+                        <div class="progress-stat-value" id="currentEmail">0</div>
+                    </div>
+                </div>
+                <div class="progress-bar-wrapper">
+                    <div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
+            </div>
+
+            <div class="progress-logs" id="progressLogs"></div>
+        </div>
+    </div>
+
+    <script>
+        let selectedRequestId = null;
+        let eventSource = null;
+
+        // Request ID management functions
+        function saveRequestId(requestId) {
+            const requestIds = getRequestIds();
+            if (!requestIds.includes(requestId)) {
+                requestIds.unshift(requestId);
+                localStorage.setItem('requestIds', JSON.stringify(requestIds));
+            }
+        }
+
+        function getRequestIds() {
+            const stored = localStorage.getItem('requestIds');
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        function deleteRequestId(requestId) {
+            const requestIds = getRequestIds();
+            const filtered = requestIds.filter(id => id !== requestId);
+            localStorage.setItem('requestIds', JSON.stringify(filtered));
+            
+            // If deleted request was selected, clear progress
+            if (requestId === selectedRequestId) {
+                clearProgress();
+            }
+            
+            loadRequestList();
+        }
+
+        function addRequestId() {
+            const input = document.getElementById('requestIdInput');
+            const requestId = input.value.trim();
+            
+            if (!requestId) {
+                showError('요청 ID를 입력해주세요');
+                return;
+            }
+            
+            // Validate UUID format
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!uuidRegex.test(requestId)) {
+                showError('올바른 요청 ID 형식이 아닙니다');
+                return;
+            }
+            
+            saveRequestId(requestId);
+            input.value = '';
+            showSuccess('요청 ID가 추가되었습니다');
+            loadRequestList();
+        }
+
+        async function loadRequestList() {
+            const requestIds = getRequestIds();
+            const listElement = document.getElementById('requestList');
+            
+            if (requestIds.length === 0) {
+                listElement.innerHTML = `
+                    <li class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <div>저장된 요청 ID가 없습니다</div>
+                    </li>
+                `;
+                return;
+            }
+            
+            listElement.innerHTML = '';
+            
+            // Fetch status for each request
+            for (const requestId of requestIds) {
+                try {
+                    const response = await fetch(`/api/request/${requestId}`);
+                    let statusInfo = {
+                        status: 'unknown',
+                        created_at: '-',
+                        email_count: 0,
+                        result_count: 0
+                    };
+                    
+                    if (response.ok) {
+                        statusInfo = await response.json();
+                    }
+                    
+                    const li = document.createElement('li');
+                    li.className = 'request-item';
+                    if (requestId === selectedRequestId) {
+                        li.classList.add('selected');
+                    }
+                    
+                    const statusClass = `status-${statusInfo.status || 'unknown'}`;
+                    const statusText = {
+                        'pending': '대기중',
+                        'processing': '처리중',
+                        'completed': '완료',
+                        'failed': '실패',
+                        'unknown': '알수없음'
+                    }[statusInfo.status || 'unknown'];
+                    
+                    li.innerHTML = `
+                        <div class="request-info">
+                            <div class="request-id">ID: ${requestId}</div>
+                            <div>
+                                <span class="request-status ${statusClass}">${statusText}</span>
+                                <span style="font-size: 12px; color: #999;">
+                                    생성: ${new Date(statusInfo.created_at).toLocaleString('ko-KR') || '-'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="request-actions">
+                            <button class="btn btn-small" onclick="selectRequest('${requestId}')">조회</button>
+                            <button class="btn btn-small btn-danger" onclick="deleteRequestId('${requestId}')">삭제</button>
+                        </div>
+                    `;
+                    
+                    listElement.appendChild(li);
+                } catch (error) {
+                    console.error('Error loading request:', error);
+                }
+            }
+        }
+
+        async function selectRequest(requestId) {
+            selectedRequestId = requestId;
+            
+            // Close existing event source
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            // Reload list to show selection
+            await loadRequestList();
+            
+            // Clear previous logs
+            document.getElementById('progressLogs').innerHTML = '';
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('progressBarContainer').style.display = 'none';
+            
+            // Reset progress
+            document.getElementById('totalEmails').textContent = '0';
+            document.getElementById('currentEmail').textContent = '0';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressPercentage').textContent = '0%';
+            
+            try {
+                // Fetch request status
+                const response = await fetch(`/api/request/${requestId}`);
+                if (!response.ok) {
+                    showError('요청 정보를 가져올 수 없습니다');
+                    return;
+                }
+                
+                const statusInfo = await response.json();
+                
+                // Display request info
+                const statusText = {
+                    'pending': '대기중',
+                    'processing': '처리중',
+                    'completed': '완료',
+                    'failed': '실패'
+                }[statusInfo.status];
+                
+                const statusClass = `status-${statusInfo.status}`;
+                
+                document.getElementById('currentRequestInfo').innerHTML = `
+                    <div style="margin-bottom: 15px;">
+                        <strong>요청 ID:</strong> <code>${requestId}</code><br>
+                        <strong>상태:</strong> <span class="request-status ${statusClass}">${statusText}</span><br>
+                        <strong>생성시간:</strong> ${new Date(statusInfo.created_at).toLocaleString('ko-KR')}<br>
+                        <strong>업데이트:</strong> ${new Date(statusInfo.updated_at).toLocaleString('ko-KR')}<br>
+                        ${statusInfo.email_count ? `<strong>이메일 수:</strong> ${statusInfo.email_count}개<br>` : ''}
+                        ${statusInfo.result_count ? `<strong>결과 수:</strong> ${statusInfo.result_count}건<br>` : ''}
+                        ${statusInfo.error ? `<strong>오류:</strong> <span style="color: #e74c3c;">${statusInfo.error}</span><br>` : ''}
+                    </div>
+                `;
+                
+                // Connect to SSE stream if status is pending or processing
+                if (statusInfo.status === 'pending' || statusInfo.status === 'processing') {
+                    if (statusInfo.session_id) {
+                        connectToStream(statusInfo.session_id);
+                    } else {
+                        addLogLine('세션 ID가 없어 실시간 로그를 표시할 수 없습니다.');
+                    }
+                } else {
+                    addLogLine(`요청 상태: ${statusText}`);
+                    if (statusInfo.status === 'completed') {
+                        addLogLine('처리가 완료되었습니다. 결과는 이메일로 전송되었습니다.');
+                    }
+                }
+                
+            } catch (error) {
+                showError('요청 정보를 가져오는 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
+
+        function connectToStream(sessionId) {
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            eventSource = new EventSource(`/stream/${sessionId}`);
+            
+            eventSource.onmessage = function(event) {
+                addLogLine(event.data);
+            };
+            
+            eventSource.onerror = function(error) {
+                console.error('EventSource error:', error);
+                addLogLine('스트림 연결이 종료되었습니다.');
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+            };
+        }
+
+        function addLogLine(message) {
+            const logsContainer = document.getElementById('progressLogs');
+            const logLine = document.createElement('div');
+            logLine.className = 'log-line';
+            
+            // Check if this is a progress update message
+            if (message.startsWith('__PROGRESS__')) {
+                const progressData = message.substring(12);
+                updateProgress(progressData);
+                return;
+            }
+            
+            // Colorize based on log level
+            if (message.includes('ERROR')) {
+                logLine.classList.add('log-error');
+            } else if (message.includes('WARNING')) {
+                logLine.classList.add('log-warning');
+            } else {
+                logLine.classList.add('log-info');
+            }
+            
+            logLine.textContent = message;
+            logsContainer.appendChild(logLine);
+            
+            // Auto-scroll to bottom
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        function updateProgress(progressData) {
+            const parts = progressData.split('|');
+            
+            if (parts[0] === 'TOTAL') {
+                const total = parseInt(parts[1]);
+                document.getElementById('totalEmails').textContent = total;
+                document.getElementById('progressBarContainer').style.display = 'block';
+            } else if (parts[0] === 'CURRENT') {
+                const current = parseInt(parts[1]);
+                const total = parseInt(parts[2]);
+                
+                document.getElementById('currentEmail').textContent = current;
+                document.getElementById('totalEmails').textContent = total;
+                
+                const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+                document.getElementById('progressBar').style.width = percentage + '%';
+                document.getElementById('progressPercentage').textContent = percentage + '%';
+            }
+        }
+
+        function clearProgress() {
+            selectedRequestId = null;
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+
+        function showError(message) {
+            const alert = document.getElementById('alert');
+            alert.className = 'alert alert-error';
+            alert.textContent = '❌ ' + message;
+            alert.style.display = 'block';
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            const alert = document.getElementById('alert');
+            alert.className = 'alert alert-success';
+            alert.textContent = '✅ ' + message;
+            alert.style.display = 'block';
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 3000);
+        }
+
+        // Load request list on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            loadRequestList();
+            
+            // Allow Enter key to add request
+            document.getElementById('requestIdInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addRequestId();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

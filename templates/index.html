@@ -41,6 +41,20 @@
             font-size: 14px;
         }
 
+        .nav {
+            margin-top: 15px;
+        }
+
+        .nav a {
+            color: #667eea;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+
+        .nav a:hover {
+            text-decoration: underline;
+        }
+
         .card {
             background: white;
             padding: 30px;
@@ -407,6 +421,9 @@
         <div class="header">
             <h1>📧 Gmail 상담 보고서 생성기</h1>
             <p class="subtitle">Gmail에서 상담 이메일을 수집하고 엑셀 보고서를 생성합니다</p>
+            <div class="nav">
+                <a href="/status">📊 요청 진행상황 조회</a>
+            </div>
         </div>
 
         <div class="card">
@@ -532,6 +549,26 @@
     <script>
         let tableData = [];
         let eventSource = null;
+
+        // Request ID management functions
+        function saveRequestId(requestId) {
+            const requestIds = getRequestIds();
+            if (!requestIds.includes(requestId)) {
+                requestIds.unshift(requestId); // Add to beginning
+                localStorage.setItem('requestIds', JSON.stringify(requestIds));
+            }
+        }
+
+        function getRequestIds() {
+            const stored = localStorage.getItem('requestIds');
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        function deleteRequestId(requestId) {
+            const requestIds = getRequestIds();
+            const filtered = requestIds.filter(id => id !== requestId);
+            localStorage.setItem('requestIds', JSON.stringify(filtered));
+        }
 
         // Toggle password visibility
         function togglePassword() {
@@ -677,8 +714,13 @@
                 if (response.ok) {
                     // Check if this is background processing
                     if (data.background) {
+                        // Save request ID to localStorage
+                        if (data.request_id) {
+                            saveRequestId(data.request_id);
+                        }
+                        
                         // Background processing started
-                        showSuccess(`처리가 시작되었습니다. ${data.email_count}개의 이메일을 처리 중입니다. 완료되면 이메일로 결과를 보내드립니다.`);
+                        showSuccess(`처리가 시작되었습니다. ${data.email_count}개의 이메일을 처리 중입니다. 완료되면 이메일로 결과를 보내드립니다.${data.request_id ? ' 요청 ID: ' + data.request_id : ''}`);
                         // Keep the event source open to show logs
                         // Don't close it yet
                     } else {
