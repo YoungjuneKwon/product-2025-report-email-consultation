@@ -214,6 +214,72 @@
             color: #333;
         }
 
+        .progress-bar-container {
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .progress-stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .progress-stat-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .progress-stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .progress-bar-wrapper {
+            background: #e0e0e0;
+            height: 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .progress-percentage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #333;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
+        }
+
         .progress-logs {
             background: #1e1e1e;
             color: #d4d4d4;
@@ -407,6 +473,22 @@
 
             <div class="progress-container" id="progressContainer">
                 <h3>📋 처리 진행 상황</h3>
+                <div class="progress-bar-container" id="progressBarContainer" style="display: none;">
+                    <div class="progress-stats">
+                        <div class="progress-stat-item">
+                            <div class="progress-stat-label">전체 메일 수</div>
+                            <div class="progress-stat-value" id="totalEmails">0</div>
+                        </div>
+                        <div class="progress-stat-item">
+                            <div class="progress-stat-label">처리중인 메일</div>
+                            <div class="progress-stat-value" id="currentEmail">0</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+                        <div class="progress-percentage" id="progressPercentage">0%</div>
+                    </div>
+                </div>
                 <div class="progress-logs" id="progressLogs"></div>
             </div>
         </div>
@@ -472,6 +554,13 @@
             const logLine = document.createElement('div');
             logLine.className = 'log-line';
             
+            // Check if this is a progress update message
+            if (message.startsWith('__PROGRESS__')) {
+                const progressData = message.substring(12); // Remove '__PROGRESS__' prefix
+                updateProgress(progressData);
+                return; // Don't display progress data in logs
+            }
+            
             // Colorize based on log level
             if (message.includes('ERROR')) {
                 logLine.classList.add('log-error');
@@ -488,6 +577,29 @@
             logsContainer.scrollTop = logsContainer.scrollHeight;
         }
 
+        function updateProgress(progressData) {
+            const parts = progressData.split('|');
+            
+            if (parts[0] === 'TOTAL') {
+                // Initialize total count
+                const total = parseInt(parts[1]);
+                document.getElementById('totalEmails').textContent = total;
+                document.getElementById('progressBarContainer').style.display = 'block';
+            } else if (parts[0] === 'CURRENT') {
+                // Update current progress
+                const current = parseInt(parts[1]);
+                const total = parseInt(parts[2]);
+                
+                document.getElementById('currentEmail').textContent = current;
+                document.getElementById('totalEmails').textContent = total;
+                
+                // Update progress bar
+                const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+                document.getElementById('progressBar').style.width = percentage + '%';
+                document.getElementById('progressPercentage').textContent = percentage + '%';
+            }
+        }
+
         document.getElementById('processForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -496,6 +608,13 @@
             document.getElementById('alert').style.display = 'none';
             document.getElementById('progressContainer').style.display = 'none';
             document.getElementById('progressLogs').innerHTML = '';
+            document.getElementById('progressBarContainer').style.display = 'none';
+            
+            // Reset progress bar
+            document.getElementById('totalEmails').textContent = '0';
+            document.getElementById('currentEmail').textContent = '0';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressPercentage').textContent = '0%';
             
             // Show loading
             document.getElementById('loading').style.display = 'block';

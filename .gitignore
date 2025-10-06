@@ -44,3 +44,6 @@ ENV/
 instance/
 .webassets-cache
 .flask_session/
+
+# Screenshots
+screenshots/
