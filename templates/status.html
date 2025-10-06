@@ -599,8 +599,42 @@
             logLine.textContent = message;
             logsContainer.appendChild(logLine);
             
+            // Limit log output to 2000 characters
+            limitLogOutput(logsContainer);
+            
             // Auto-scroll to bottom
             logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        function limitLogOutput(logsContainer) {
+            const MAX_LOG_CHARS = 2000;
+            let totalChars = 0;
+            const logLines = Array.from(logsContainer.children);
+            
+            // Calculate total character count from the bottom up
+            for (let i = logLines.length - 1; i >= 0; i--) {
+                const lineText = logLines[i].textContent || '';
+                totalChars += lineText.length;
+                
+                // If we exceed the limit, remove older log lines
+                if (totalChars > MAX_LOG_CHARS) {
+                    // Remove all lines from the beginning up to current index
+                    for (let j = 0; j <= i; j++) {
+                        if (logLines[j] && logLines[j].parentNode) {
+                            logLines[j].parentNode.removeChild(logLines[j]);
+                        }
+                    }
+                    
+                    // Add a marker to indicate logs were truncated
+                    if (logsContainer.children.length > 0) {
+                        const truncateMarker = document.createElement('div');
+                        truncateMarker.className = 'log-line log-warning';
+                        truncateMarker.textContent = '... (이전 로그는 2000자 제한으로 인해 생략되었습니다)';
+                        logsContainer.insertBefore(truncateMarker, logsContainer.firstChild);
+                    }
+                    break;
+                }
+            }
         }
 
         function updateProgress(progressData) {
