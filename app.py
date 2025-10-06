@@ -38,8 +38,13 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max request size
 log_queues = {}
 
 # Store for request status tracking
-# Format: {request_id: {status, session_id, created_at, updated_at, email_count, result_count, error}}
+# Format: {request_id: {status, session_id, created_at, updated_at, email_count, result_count, error, result_file}}
 request_status = {}
+
+# Directory to store result files
+RESULTS_DIR = "results"
+if not os.path.exists(RESULTS_DIR):
+    os.makedirs(RESULTS_DIR)
 
 
 class QueueHandler(logging.Handler):
@@ -379,7 +384,8 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         
         # Create Excel file
         output_file = f"consultation_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        logger.info(f"엑셀 보고서를 생성하고 있습니다: {output_file}")
+        result_file_path = os.path.join(RESULTS_DIR, f"{request_id}_{output_file}" if request_id else output_file)
+        logger.info(f"엑셀 보고서를 생성하고 있습니다: {result_file_path}")
         
         # Prepare data for Excel
         logger.info("데이터를 정리하고 있습니다...")
@@ -402,28 +408,24 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         # Create DataFrame and save to Excel
         logger.info("엑셀 파일을 저장하고 있습니다...")
         df = pd.DataFrame(data)
-        df.to_excel(output_file, index=False, engine='openpyxl')
-        logger.info(f"엑셀 보고서가 생성되었습니다: {output_file}")
+        df.to_excel(result_file_path, index=False, engine='openpyxl')
+        logger.info(f"엑셀 보고서가 생성되었습니다: {result_file_path}")
         
         # Send completion notification email with attachment
         logger.info("완료 알림 이메일을 전송하고 있습니다...")
-        send_completion_notification(gmail_userid, gmail_password, pairs, output_file, request_id)
+        send_completion_notification(gmail_userid, gmail_password, pairs, result_file_path, request_id)
         logger.info("완료 알림 이메일이 전송되었습니다")
         
-        # Update request status to completed
+        # Update request status to completed with result file path
         if request_id and request_id in request_status:
             request_status[request_id]['status'] = 'completed'
             request_status[request_id]['result_count'] = len(pairs)
+            request_status[request_id]['result_file'] = result_file_path
             request_status[request_id]['updated_at'] = datetime.now().isoformat()
         
         logger.info(f"모든 처리가 완료되었습니다. 총 {len(pairs)}건의 상담 기록을 처리했습니다")
         
-        # Clean up Excel file after sending
-        try:
-            os.remove(output_file)
-            logger.info(f"임시 엑셀 파일을 정리했습니다: {output_file}")
-        except Exception as e:
-            logger.warning(f"엑셀 파일 삭제 실패: {e}")
+        # Note: Don't clean up the Excel file anymore since we want to keep it for download
         
     except Exception as e:
         logger.exception(f"Error in background processing: {e}")
@@ -690,6 +692,46 @@ def get_request_status(request_id):
         'request_id': request_id,
         **request_status[request_id]
     })
+
+
+@app.route('/api/request/<request_id>/download', methods=['GET'])
+def download_result_file(request_id):
+    """Download the result Excel file for a completed request."""
+    if request_id not in request_status:
+        return jsonify({'error': '요청 ID를 찾을 수 없습니다'}), 404
+    
+    request_info = request_status[request_id]
+    
+    # Check if request is completed
+    if request_info['status'] != 'completed':
+        return jsonify({'error': '아직 처리가 완료되지 않았습니다'}), 400
+    
+    # Check if result file exists
+    if 'result_file' not in request_info or not request_info['result_file']:
+        return jsonify({'error': '결과 파일이 없습니다'}), 404
+    
+    result_file_path = request_info['result_file']
+    
+    # Check if file exists on disk
+    if not os.path.exists(result_file_path):
+        return jsonify({'error': '결과 파일을 찾을 수 없습니다'}), 404
+    
+    try:
+        # Generate a user-friendly filename
+        filename = f"consultation_report_{request_id[:8]}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        
+        logger.info(f"Downloading result file for request {request_id}: {result_file_path}")
+        
+        return send_file(
+            result_file_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    
+    except Exception as e:
+        logger.exception(f"Error downloading file for request {request_id}: {e}")
+        return jsonify({'error': f'파일 다운로드 중 오류가 발생했습니다: {str(e)}'}), 500
 
 
 @app.route('/api/requests', methods=['GET'])

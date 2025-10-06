@@ -457,6 +457,22 @@
                         'unknown': '알수없음'
                     }[statusInfo.status || 'unknown'];
                     
+                    // Prepare action buttons
+                    let actionButtons = `
+                        <button class="btn btn-small" onclick="selectRequest('${requestId}')">조회</button>
+                    `;
+                    
+                    // Add download button for completed requests with result file
+                    if (statusInfo.status === 'completed' && statusInfo.result_file) {
+                        actionButtons += `
+                            <button class="btn btn-small" style="background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);" onclick="downloadResultFile('${requestId}')">다운로드</button>
+                        `;
+                    }
+                    
+                    actionButtons += `
+                        <button class="btn btn-small btn-danger" onclick="deleteRequestId('${requestId}')">삭제</button>
+                    `;
+                    
                     li.innerHTML = `
                         <div class="request-info">
                             <div class="request-id">ID: ${requestId}</div>
@@ -468,8 +484,7 @@
                             </div>
                         </div>
                         <div class="request-actions">
-                            <button class="btn btn-small" onclick="selectRequest('${requestId}')">조회</button>
-                            <button class="btn btn-small btn-danger" onclick="deleteRequestId('${requestId}')">삭제</button>
+                            ${actionButtons}
                         </div>
                     `;
                     
@@ -522,6 +537,18 @@
                 
                 const statusClass = `status-${statusInfo.status}`;
                 
+                // Prepare download button for completed requests
+                let downloadButton = '';
+                if (statusInfo.status === 'completed' && statusInfo.result_file) {
+                    downloadButton = `
+                        <div style="margin-top: 15px;">
+                            <button class="btn" style="background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);" onclick="downloadResultFile('${requestId}')">
+                                📥 결과 파일 다운로드
+                            </button>
+                        </div>
+                    `;
+                }
+                
                 document.getElementById('currentRequestInfo').innerHTML = `
                     <div style="margin-bottom: 15px;">
                         <strong>요청 ID:</strong> <code>${requestId}</code><br>
@@ -532,6 +559,7 @@
                         ${statusInfo.result_count ? `<strong>결과 수:</strong> ${statusInfo.result_count}건<br>` : ''}
                         ${statusInfo.error ? `<strong>오류:</strong> <span style="color: #e74c3c;">${statusInfo.error}</span><br>` : ''}
                     </div>
+                    ${downloadButton}
                 `;
                 
                 // Update progress bar with existing data if available
@@ -720,6 +748,54 @@
 
         function showSuccess(message) {
             const alert = document.getElementById('alert');
+            alert.className = 'alert alert-success';
+            alert.textContent = '✅ ' + message;
+            alert.style.display = 'block';
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 3000);
+        }
+
+        async function downloadResultFile(requestId) {
+            try {
+                showSuccess('파일 다운로드를 시작합니다...');
+                
+                const response = await fetch(`/api/request/${requestId}/download`);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '다운로드 실패');
+                }
+                
+                // Get filename from Content-Disposition header or use default
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = `consultation_report_${requestId.substring(0, 8)}.xlsx`;
+                if (contentDisposition) {
+                    const matches = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (matches && matches[1]) {
+                        filename = matches[1];
+                    }
+                }
+                
+                // Create blob and download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                showSuccess('파일이 성공적으로 다운로드되었습니다');
+                
+            } catch (error) {
+                console.error('Download error:', error);
+                showError('파일 다운로드 중 오류가 발생했습니다: ' + error.message);
+            }
+        }
             alert.className = 'alert alert-success';
             alert.textContent = '✅ ' + message;
             alert.style.display = 'block';

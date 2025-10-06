@@ -53,4 +53,7 @@ instance/
 # Screenshots
 screenshots/
 
+# Results directory with downloaded files
+results/
+
 tmp/
