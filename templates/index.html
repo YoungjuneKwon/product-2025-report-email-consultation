@@ -651,13 +651,20 @@
                     body: formData
                 });
                 
-                const data = await response.json();
-                
                 // Close the event source
                 if (eventSource) {
                     eventSource.close();
                     eventSource = null;
                 }
+                
+                // Check if response is JSON before parsing
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    // Server returned non-JSON response (likely HTML error page)
+                    throw new Error('서버에서 예상치 못한 응답을 받았습니다. 서버 오류가 발생했을 수 있습니다.');
+                }
+                
+                const data = await response.json();
                 
                 if (response.ok) {
                     showSuccess(`${data.count}건의 상담 기록을 찾았습니다`);
@@ -784,8 +791,15 @@
                     document.body.removeChild(a);
                     showSuccess('엑셀 파일이 다운로드되었습니다');
                 } else {
-                    const data = await response.json();
-                    showError(data.error || '다운로드 중 오류가 발생했습니다');
+                    // Check if response is JSON before parsing
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const data = await response.json();
+                        showError(data.error || '다운로드 중 오류가 발생했습니다');
+                    } else {
+                        // Server returned non-JSON response (likely HTML error page)
+                        showError('다운로드 중 서버 오류가 발생했습니다');
+                    }
                 }
             } catch (error) {
                 showError('다운로드 중 오류가 발생했습니다: ' + error.message);
