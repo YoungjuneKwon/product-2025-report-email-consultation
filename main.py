@@ -536,9 +536,13 @@ class EmailFilter:
                     logger.info(f"    Original From: {original_from}")
                     logger.info(f"    Original Subject: {original_subject}")
                     
-                    pair = EmailPair(original, sent_msg)
-                    pairs.append(pair)
-                    logger.info(f"  ✓ PAIR CREATED (Total pairs: {len(pairs)})")
+                    # Check if original sender is the configured user (GMAIL_USERID)
+                    if self.userid in original_from:
+                        logger.info(f"  ✗ EXCLUDED - Original sender is GMAIL_USERID ({self.userid})")
+                    else:
+                        pair = EmailPair(original, sent_msg)
+                        pairs.append(pair)
+                        logger.info(f"  ✓ PAIR CREATED (Total pairs: {len(pairs)})")
                 else:
                     logger.info(f"  ✗ Original email not found (tried both Message-ID and subject matching)")
             else:
@@ -606,16 +610,22 @@ class EmailFilter:
                 
                 if original:
                     original_to = original.get('To', 'Unknown')
+                    original_from = original.get('From', 'Unknown')
                     original_subject = original.get('Subject', 'No Subject')
                     
                     logger.info(f"  ✓ Found original email via {match_method}:")
+                    logger.info(f"    Original From: {original_from}")
                     logger.info(f"    Original To: {original_to}")
                     logger.info(f"    Original Subject: {original_subject}")
                     
-                    # In this case, the "request" is the sent email and "response" is the inbox email
-                    pair = EmailPair(original, inbox_msg)
-                    pairs.append(pair)
-                    logger.info(f"  ✓ PAIR CREATED (Total pairs: {len(pairs)})")
+                    # Check if original sender is the configured user (GMAIL_USERID)
+                    if self.userid in original_from:
+                        logger.info(f"  ✗ EXCLUDED - Original sender is GMAIL_USERID ({self.userid})")
+                    else:
+                        # In this case, the "request" is the sent email and "response" is the inbox email
+                        pair = EmailPair(original, inbox_msg)
+                        pairs.append(pair)
+                        logger.info(f"  ✓ PAIR CREATED (Total pairs: {len(pairs)})")
                 else:
                     logger.info(f"  ✗ Original email not found (tried both Message-ID and subject matching)")
             else:
