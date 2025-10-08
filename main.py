@@ -44,27 +44,55 @@ class EmailPair:
         return date.strftime('%Y-%m-%d')
     
     def get_start_time(self) -> str:
-        """Get response email time in HH:MM format."""
+        """Get response email time in HH:MM format with adjustments.
+        - Minutes rounded down to 5-minute intervals
+        - Times before 09:00 converted to 09:05
+        """
         date = parsedate_to_datetime(self.response['Date'])
         if date.tzinfo is None:
             date = date.replace(tzinfo=timezone.utc)
-        return date.strftime('%H:%M')
+        
+        hour = date.hour
+        minute = date.minute
+        
+        # Round down minutes to 5-minute intervals (0, 5, 10, 15, ..., 55)
+        minute = (minute // 5) * 5
+        
+        # If time is before 09:00, set to 09:05
+        if hour < 9:
+            hour = 9
+            minute = 5
+        
+        return f"{hour:02d}:{minute:02d}"
     
     def get_end_time(self) -> str:
-        """Get response email time + 30 minutes in HH:MM format."""
-        date = parsedate_to_datetime(self.response['Date'])
-        if date.tzinfo is None:
-            date = date.replace(tzinfo=timezone.utc)
-        end_time = date + timedelta(minutes=30)
-        return end_time.strftime('%H:%M')
+        """Get start time + 30 minutes in HH:MM format."""
+        # Parse start time to add 30 minutes
+        start_time = self.get_start_time()
+        hour, minute = map(int, start_time.split(':'))
+        
+        # Add 30 minutes
+        minute += 30
+        if minute >= 60:
+            hour += 1
+            minute -= 60
+        
+        # Handle day overflow (24:00 -> 00:00)
+        if hour >= 24:
+            hour -= 24
+        
+        return f"{hour:02d}:{minute:02d}"
     
     def get_request_text(self) -> str:
-        """Extract plain text from request email body."""
-        return self._get_email_body(self.request)
+        """Extract plain text from request email body, remove HTML tags, limit to 490 chars."""
+        text = self._get_email_body(self.request)
+        text = self._strip_html_tags(text)
+        return text[:490] if len(text) > 490 else text
     
     def get_response_text(self) -> str:
-        """Extract plain text from response email body."""
-        return self._get_email_body(self.response)
+        """Extract plain text from response email body, limit to 490 chars."""
+        text = self._get_email_body(self.response)
+        return text[:490] if len(text) > 490 else text
     
     def get_student_id(self) -> str:
         """Extract student ID from request email body."""
@@ -162,6 +190,13 @@ class EmailPair:
                 logger.warning(f"Error decoding email: {e}")
         
         return body.strip()
+    
+    def _strip_html_tags(self, text: str) -> str:
+        """Remove HTML tags from text."""
+        # Remove HTML tags using regex
+        # This pattern matches anything between < and >
+        clean_text = re.sub(r'<[^>]+>', '', text)
+        return clean_text.strip()
 
 
 class GmailIMAPClient:
@@ -858,29 +893,29 @@ def create_excel_report(pairs: List[EmailPair], output_file: str):
         logger.info(f"  Response length: {len(pair.get_response_text())} characters")
         
         data.append({
-            '상담일': pair.get_date(),
-            '시작시간': pair.get_start_time(),
-            '종료시간': pair.get_end_time(),
-            '장소': '연구실',
-            '학생': pair.get_student_name(),
             '학번': pair.get_student_id(),
-            '발신자 이메일 주소': pair.get_request_from(),
-            '수신자 이메일 주소': pair.get_request_to(),
-            '메일의 제목': pair.get_request_subject(),
-            '상담요청 내용': pair.get_request_text(),
-            '교수 답변': pair.get_response_text()
+            '성명': pair.get_student_name(),
+            '상담형태': 3,
+            '상담일': pair.get_date(),
+            '상담시작시간': pair.get_start_time(),
+            '상담종료시간': pair.get_end_time(),
+            '상담유형': 'CF01',
+            '장소': '연구실',
+            '학생상담신청내용': pair.get_request_text(),
+            '교수답변내용': pair.get_response_text(),
+            '공개여부': 'N'
         })
     
     # Create DataFrame
     logger.info(f"\nCreating DataFrame with {len(data)} rows...")
     df = pd.DataFrame(data)
     
-    # Ensure student ID is treated as string (not numeric)
+    # Ensure student ID and name are treated as strings (not numeric)
     # Replace empty strings with actual empty strings for display
     if '학번' in df.columns:
         df['학번'] = df['학번'].fillna('')
-    if '학생' in df.columns:
-        df['학생'] = df['학생'].fillna('')
+    if '성명' in df.columns:
+        df['성명'] = df['성명'].fillna('')
     
     # Export to Excel
     logger.info(f"Exporting to Excel file: {output_file}")
