@@ -231,9 +231,9 @@ def send_completion_notification(gmail_userid: str, gmail_password: str,
             <tr>
                 <th>번호</th>
                 <th>상담일</th>
-                <th>시작시간</th>
-                <th>종료시간</th>
-                <th>학생</th>
+                <th>상담시작시간</th>
+                <th>상담종료시간</th>
+                <th>성명</th>
                 <th>학번</th>
                 <th>제목</th>
             </tr>
@@ -392,17 +392,17 @@ def process_emails_background(gmail_userid: str, gmail_password: str,
         data = []
         for pair in pairs:
             data.append({
-                '상담일': pair.get_date(),
-                '시작시간': pair.get_start_time(),
-                '종료시간': pair.get_end_time(),
-                '장소': '연구실',
-                '학생': pair.get_student_name(),
                 '학번': pair.get_student_id(),
-                '발신자 이메일 주소': pair.get_request_from(),
-                '수신자 이메일 주소': pair.get_request_to(),
-                '메일의 제목': pair.get_request_subject(),
-                '상담요청 내용': pair.get_request_text(),
-                '교수 답변': pair.get_response_text()
+                '성명': pair.get_student_name(),
+                '상담형태': 3,
+                '상담일': pair.get_date(),
+                '상담시작시간': pair.get_start_time(),
+                '상담종료시간': pair.get_end_time(),
+                '상담유형': 'CF01',
+                '장소': '연구실',
+                '학생상담신청내용': pair.get_request_text(),
+                '교수답변내용': pair.get_response_text(),
+                '공개여부': 'N'
             })
         
         # Create DataFrame and save to Excel
